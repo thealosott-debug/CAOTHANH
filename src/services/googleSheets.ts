@@ -22,8 +22,8 @@ export const RESEARCH_SHEETS: SheetDefinition[] = [
   },
   {
     name: 'USERS',
-    description: 'Danh sách tài khoản (không bao giờ lưu mật khẩu thô)',
-    columns: ['USER_ID', 'USERNAME', 'FULL_NAME', 'PHONE', 'ROLE', 'HOUSEHOLD_ID', 'STATUS', 'TITLE', 'ORGANIZATION', 'CREATED_AT']
+    description: 'Danh sách tài khoản (đầy đủ thông tin xác thực an toàn)',
+    columns: ['USER_ID', 'USERNAME', 'FULL_NAME', 'PHONE', 'ROLE', 'HOUSEHOLD_ID', 'STATUS', 'TITLE', 'ORGANIZATION', 'PASSWORD_HASH', 'SALT', 'CREATED_AT']
   },
   {
     name: 'HOUSEHOLDS',
@@ -140,10 +140,10 @@ export class GoogleSheetsService {
       ['APPS_SCRIPT_URL', config.appsScriptUrl || '', 'URL Web App tiếp nhận dữ liệu', new Date().toISOString()],
     ];
 
-    // 2. USERS (Không đưa mật khẩu ra)
+    // 2. USERS
     payload['USERS'] = [
-      ['USER_ID', 'USERNAME', 'FULL_NAME', 'PHONE', 'ROLE', 'HOUSEHOLD_ID', 'STATUS', 'TITLE', 'ORGANIZATION', 'CREATED_AT'],
-      ...users.map(u => [u.id, u.username, u.fullName, u.phone, u.role, u.householdId || '', u.status, u.title || '', u.organization || '', u.createdAt])
+      ['USER_ID', 'USERNAME', 'FULL_NAME', 'PHONE', 'ROLE', 'HOUSEHOLD_ID', 'STATUS', 'TITLE', 'ORGANIZATION', 'PASSWORD_HASH', 'SALT', 'CREATED_AT'],
+      ...users.map(u => [u.id, u.username, u.fullName, u.phone, u.role, u.householdId || '', u.status, u.title || '', u.organization || '', u.passwordHash, u.salt, u.createdAt])
     ];
 
     // 3. HOUSEHOLDS
@@ -396,8 +396,42 @@ export class GoogleSheetsService {
       StorageService.setSyncStatus('SYNCING');
       const payload = this.prepareWorkbookPayload();
 
+      // BƯỚC 1: Ưu tiên gửi qua Cloud Backend Server (Không bị hạn chế CORS trình duyệt)
       try {
-        // Cố gắng gửi với fetch tiêu chuẩn
+        const serverRes = await fetch('/api/cloud-sync-sheets', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            appsScriptUrl: url,
+            spreadsheetId: config.spreadsheetId,
+            sheets: payload,
+          }),
+        });
+
+        if (serverRes.ok) {
+          const serverJson = await serverRes.json();
+          if (serverJson.success) {
+            StorageService.setSyncStatus('SYNCED');
+            StorageService.addAuditLog({
+              userId: 'system',
+              username: 'system',
+              userRole: 'ADMIN',
+              action: 'SYNC',
+              targetModule: 'GOOGLE_SHEETS',
+              reason: `Đồng bộ thành công 17 sheets lên Google Sheets qua Cloud Backend lúc ${new Date().toLocaleTimeString('vi-VN')}`
+            });
+            return {
+              success: true,
+              message: 'Đã lưu và đồng bộ toàn bộ 17 Sheet lên Google Sheets thành công!'
+            };
+          }
+        }
+      } catch (serverErr) {
+        console.warn('Server proxy sync not available, falling back to direct browser fetch:', serverErr);
+      }
+
+      // BƯỚC 2: Fallback gửi trực tiếp từ trình duyệt
+      try {
         const response = await fetch(url, {
           method: 'POST',
           headers: {

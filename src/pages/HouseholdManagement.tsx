@@ -22,6 +22,7 @@ import { StorageService } from '../services/storage';
 import { UnlockModal } from '../components/UnlockModal';
 import { ExcelImportModal } from '../components/ExcelImportModal';
 import { ExcelImportService } from '../services/excelImportService';
+import { generateSalt, hashPassword } from '../utils/crypto';
 
 interface HouseholdManagementProps {
   currentUser: User;
@@ -148,7 +149,7 @@ export const HouseholdManagement: React.FC<HouseholdManagementProps> = ({
   };
 
   // Lưu hộ chăn nuôi
-  const handleSaveHousehold = (e: React.FormEvent) => {
+  const handleSaveHousehold = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.id.trim() || !formData.representativeName.trim() || !formData.phone.trim()) {
       setFormError('Vui lòng điền đầy đủ Mã hộ, Họ tên đại diện và Số điện thoại.');
@@ -279,9 +280,11 @@ export const HouseholdManagement: React.FC<HouseholdManagementProps> = ({
       bc01List.push(newBc01);
       StorageService.saveBC01List(bc01List);
 
-      // Tự động cấp tài khoản đăng nhập cho hộ chăn nuôi nếu chưa có
+      // Tự động cấp tài khoản đăng nhập cho hộ chăn nuôi nếu chưa có (Mật khẩu mặc định: 123456)
       const userList = StorageService.getUsers();
       if (!userList.some((u) => u.householdId === newH.id || u.username === newH.id.toLowerCase())) {
+        const hSalt = generateSalt(16);
+        const hHash = await hashPassword('123456', hSalt);
         userList.push({
           id: `USR_${newH.id}`,
           username: newH.id.toLowerCase(),
@@ -290,8 +293,8 @@ export const HouseholdManagement: React.FC<HouseholdManagementProps> = ({
           role: 'HOUSEHOLD',
           householdId: newH.id,
           status: 'ACTIVE',
-          passwordHash: '',
-          salt: 'SALT_DEFAULT',
+          passwordHash: hHash,
+          salt: hSalt,
           createdAt: new Date().toISOString(),
         });
         StorageService.saveUsers(userList);

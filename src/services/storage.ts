@@ -101,6 +101,13 @@ export class StorageService {
     this.notifyDataChange();
   }
 
+  static saveConfigDirectly(config: ResearchConfig): void {
+    if (!config.appsScriptUrl || config.appsScriptUrl.trim() === '') {
+      config.appsScriptUrl = PERMANENT_APPS_SCRIPT_URL;
+    }
+    localStorage.setItem(STORAGE_KEYS.CONFIG, JSON.stringify(config));
+  }
+
   // --- USERS ---
   static getUsers(): User[] {
     try {
@@ -114,6 +121,10 @@ export class StorageService {
   static saveUsers(users: User[]): void {
     localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
     this.notifyDataChange();
+  }
+
+  static saveUsersDirectly(users: User[]): void {
+    localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
   }
 
   // --- HOUSEHOLDS ---
@@ -131,6 +142,10 @@ export class StorageService {
     this.notifyDataChange();
   }
 
+  static saveHouseholdsDirectly(households: Household[]): void {
+    localStorage.setItem(STORAGE_KEYS.HOUSEHOLDS, JSON.stringify(households));
+  }
+
   // --- BC01 ---
   static getBC01List(): BC01Record[] {
     try {
@@ -144,6 +159,10 @@ export class StorageService {
   static saveBC01List(list: BC01Record[]): void {
     localStorage.setItem(STORAGE_KEYS.BC01, JSON.stringify(list));
     this.notifyDataChange();
+  }
+
+  static saveBC01ListDirectly(list: BC01Record[]): void {
+    localStorage.setItem(STORAGE_KEYS.BC01, JSON.stringify(list));
   }
 
   // --- BC02 ---
@@ -161,6 +180,10 @@ export class StorageService {
     this.notifyDataChange();
   }
 
+  static saveBC02ListDirectly(list: BC02Record[]): void {
+    localStorage.setItem(STORAGE_KEYS.BC02, JSON.stringify(list));
+  }
+
   // --- BC03 ---
   static getBC03List(): BC03Record[] {
     try {
@@ -174,6 +197,10 @@ export class StorageService {
   static saveBC03List(list: BC03Record[]): void {
     localStorage.setItem(STORAGE_KEYS.BC03, JSON.stringify(list));
     this.notifyDataChange();
+  }
+
+  static saveBC03ListDirectly(list: BC03Record[]): void {
+    localStorage.setItem(STORAGE_KEYS.BC03, JSON.stringify(list));
   }
 
   // --- BC04 ---
@@ -191,6 +218,10 @@ export class StorageService {
     this.notifyDataChange();
   }
 
+  static saveBC04ListDirectly(list: BC04Record[]): void {
+    localStorage.setItem(STORAGE_KEYS.BC04, JSON.stringify(list));
+  }
+
   // --- BC05 ---
   static getBC05List(): BC05Record[] {
     try {
@@ -204,6 +235,10 @@ export class StorageService {
   static saveBC05List(list: BC05Record[]): void {
     localStorage.setItem(STORAGE_KEYS.BC05, JSON.stringify(list));
     this.notifyDataChange();
+  }
+
+  static saveBC05ListDirectly(list: BC05Record[]): void {
+    localStorage.setItem(STORAGE_KEYS.BC05, JSON.stringify(list));
   }
 
   // --- BC06 ---
@@ -221,6 +256,10 @@ export class StorageService {
     this.notifyDataChange();
   }
 
+  static saveBC06ListDirectly(list: BC06Record[]): void {
+    localStorage.setItem(STORAGE_KEYS.BC06, JSON.stringify(list));
+  }
+
   // --- BC07 ---
   static getBC07List(): BC07Record[] {
     try {
@@ -234,6 +273,10 @@ export class StorageService {
   static saveBC07List(list: BC07Record[]): void {
     localStorage.setItem(STORAGE_KEYS.BC07, JSON.stringify(list));
     this.notifyDataChange();
+  }
+
+  static saveBC07ListDirectly(list: BC07Record[]): void {
+    localStorage.setItem(STORAGE_KEYS.BC07, JSON.stringify(list));
   }
 
   // --- AUDIT LOGS ---
@@ -361,17 +404,30 @@ export class StorageService {
     });
   }
 
-  // --- KHỞI TẠO HỆ THỐNG LẦN ĐẦU (SEEDING) ---
+  // --- KHỞI TẠO HỆ THỐNG AN TOÀN (BẢO TOÀN DỮ LIỆU ĐÃ TẠO) ---
   static async initializeDatabaseIfEmpty(): Promise<void> {
-    const isCleaned = localStorage.getItem('gfr_real_data_clean_flag_v3');
-    if (!isCleaned) {
-      await this.resetToCleanState();
-      return;
-    }
-
     const existingUsers = this.getUsers();
-    if (existingUsers.length === 0) {
-      await this.resetToCleanState();
+    const hasAdmin = existingUsers.some(u => u.role === 'ADMIN');
+
+    // Chỉ bổ sung tài khoản Admin mặc định nếu hệ thống chưa từng có admin
+    if (!hasAdmin) {
+      const salt = 'SALT_ADMIN_999';
+      const hash = await hashPassword('admin123', salt);
+      const adminUser: User = {
+        id: 'USR_ADMIN_01',
+        username: 'admin',
+        fullName: 'Quản trị viên (Chủ nhiệm đề tài)',
+        email: 'admin@research.vn',
+        phone: '',
+        role: 'ADMIN',
+        status: 'ACTIVE',
+        passwordHash: hash,
+        salt,
+        createdAt: new Date().toISOString(),
+      };
+      // Giữ nguyên toàn bộ tài khoản người dùng đã tạo trước đó
+      const mergedUsers = [adminUser, ...existingUsers.filter(u => u.username !== 'admin')];
+      this.saveUsersDirectly(mergedUsers);
     }
   }
 

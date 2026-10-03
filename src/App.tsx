@@ -23,6 +23,7 @@ import { GoogleSheetsSync } from './pages/GoogleSheetsSync';
 import { AuditLogPage } from './pages/AuditLogPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { HouseholdPortal } from './pages/HouseholdPortal';
+import { CloudService } from './services/cloudService';
 import { Menu } from 'lucide-react';
 
 export default function App() {
@@ -34,16 +35,42 @@ export default function App() {
   const [syncStatus, setSyncStatus] = useState<SyncStatus>(StorageService.getSyncStatus());
   const [refreshKey, setRefreshKey] = useState(0);
 
-  // Khởi tạo cơ sở dữ liệu nếu trống
+  // Tự động nạp dữ liệu từ Cloud Server & Khởi tạo cơ sở dữ liệu an toàn
   useEffect(() => {
-    StorageService.initializeDatabaseIfEmpty().then(() => {
+    async function initSystem() {
+      // 1. Phục hồi dữ liệu từ Cloud Server (nếu có)
+      await CloudService.loadFromCloud();
+
+      // 2. Đảm bảo tài khoản quản trị tồn tại
+      await StorageService.initializeDatabaseIfEmpty();
+
+      // 3. Đăng nhập phiên làm việc hiện tại nếu đã lưu
       const user = StorageService.getCurrentUser();
       if (user) {
-        setCurrentUser(user);
+        // Kiểm tra xem user này còn tồn tại và active không
+        const allUsers = StorageService.getUsers();
+        const found = allUsers.find(u => u.id === user.id && u.status === 'ACTIVE');
+        if (found) {
+          setCurrentUser(found);
+        } else {
+          setCurrentUser(user);
+        }
       }
+
+      setRefreshKey(k => k + 1);
+    }
+
+    initSystem();
+
+    // Tự động kích hoạt lưu trữ Cloud và đẩy Google Sheets mỗi khi dữ liệu thay đổi
+    const unsubscribeCloudSync = StorageService.onDataChange(() => {
+      CloudService.triggerAutoSave(1000);
     });
 
-    const handleOnline = () => setIsOnline(true);
+    const handleOnline = () => {
+      setIsOnline(true);
+      CloudService.triggerAutoSave(300);
+    };
     const handleOffline = () => setIsOnline(false);
     const handleSyncStatusUpdate = () => {
       setSyncStatus(StorageService.getSyncStatus());
@@ -58,6 +85,7 @@ export default function App() {
     }, 2000);
 
     return () => {
+      unsubscribeCloudSync();
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
       window.removeEventListener('gfr_data_change', handleSyncStatusUpdate);

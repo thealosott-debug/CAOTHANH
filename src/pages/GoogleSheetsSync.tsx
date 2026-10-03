@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { StorageService } from '../services/storage';
 import { GoogleSheetsService, RESEARCH_SHEETS } from '../services/googleSheets';
+import { CloudService } from '../services/cloudService';
 import { ResearchConfig, User } from '../types';
 import { APPS_SCRIPT_SOURCE_CODE } from '../config/appsScriptCode';
 
@@ -29,6 +30,7 @@ export const GoogleSheetsSync: React.FC<GoogleSheetsSyncProps> = ({
   const [config, setConfig] = useState<ResearchConfig>(StorageService.getConfig());
   const [isTesting, setIsTesting] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [saveSuccessMsg, setSaveSuccessMsg] = useState('');
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [syncResult, setSyncResult] = useState<{ success: boolean; message: string } | null>(null);
   const [copiedCode, setCopiedCode] = useState(false);
@@ -36,6 +38,7 @@ export const GoogleSheetsSync: React.FC<GoogleSheetsSyncProps> = ({
   const handleSaveConfig = (e: React.FormEvent) => {
     e.preventDefault();
     StorageService.saveConfig(config);
+    CloudService.triggerAutoSave(50);
     StorageService.addAuditLog({
       userId: currentUser.id,
       username: currentUser.username,
@@ -44,7 +47,8 @@ export const GoogleSheetsSync: React.FC<GoogleSheetsSyncProps> = ({
       targetModule: 'CONFIG_SHEETS',
       reason: `Cập nhật cấu hình kết nối Google Sheets (ID: ${config.spreadsheetId || 'Chưa có'}).`,
     });
-    alert('Đã lưu cấu hình Google Sheets thành công!');
+    setSaveSuccessMsg('Đã lưu cấu hình và tự động đồng bộ lên Cloud & Google Sheets thành công!');
+    setTimeout(() => setSaveSuccessMsg(''), 4000);
     if (onRefreshData) onRefreshData();
   };
 
@@ -63,6 +67,8 @@ export const GoogleSheetsSync: React.FC<GoogleSheetsSyncProps> = ({
   const handleSyncAllSheets = async () => {
     setIsSyncing(true);
     setSyncResult(null);
+    // Lưu đồng bộ toàn bộ dữ liệu vào Cloud Server & đẩy Google Sheets
+    await CloudService.saveAllToCloud(true);
     const res = await GoogleSheetsService.syncToGoogleSheets(config.appsScriptUrl);
     setSyncResult(res);
     setIsSyncing(false);
@@ -240,6 +246,13 @@ export const GoogleSheetsSync: React.FC<GoogleSheetsSyncProps> = ({
           <Settings className="w-5 h-5 text-emerald-700" />
           <span>THIẾT LẬP KẾT NỐI GOOGLE SPREADSHEET</span>
         </h2>
+
+        {saveSuccessMsg && (
+          <div className="bg-emerald-100 border border-emerald-300 text-emerald-900 rounded-xl p-3 text-xs font-bold flex items-center space-x-2">
+            <CheckCircle className="w-4 h-4 text-emerald-700 shrink-0" />
+            <span>{saveSuccessMsg}</span>
+          </div>
+        )}
 
         <form onSubmit={handleSaveConfig} className="space-y-4 text-xs">
           <div>

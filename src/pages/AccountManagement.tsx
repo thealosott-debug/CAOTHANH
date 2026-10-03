@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { AccountStatus, Role, StudyGroup, User } from '../types';
 import { StorageService } from '../services/storage';
+import { CloudService } from '../services/cloudService';
 import { generateSalt, hashPassword } from '../utils/crypto';
 import { ExcelImportModal } from '../components/ExcelImportModal';
 import { ExcelImportService } from '../services/excelImportService';
@@ -132,6 +133,7 @@ export const AccountManagement: React.FC<AccountManagementProps> = ({
     const currentList = [...users, newUser];
     StorageService.saveUsers(currentList);
     setUsers(currentList);
+    CloudService.triggerAutoSave(50);
 
     StorageService.addAuditLog({
       userId: currentUser.id,
@@ -165,6 +167,7 @@ export const AccountManagement: React.FC<AccountManagementProps> = ({
 
     StorageService.saveUsers(currentList);
     setUsers(currentList);
+    CloudService.triggerAutoSave(50);
 
     StorageService.addAuditLog({
       userId: currentUser.id,
@@ -195,6 +198,7 @@ export const AccountManagement: React.FC<AccountManagementProps> = ({
 
     StorageService.saveUsers(currentList);
     setUsers(currentList);
+    CloudService.triggerAutoSave(50);
 
     StorageService.addAuditLog({
       userId: currentUser.id,
@@ -206,7 +210,6 @@ export const AccountManagement: React.FC<AccountManagementProps> = ({
       reason: `Admin đặt lại mật khẩu mới an toàn cho tài khoản ${resetUser.username}.`,
     });
 
-    alert(`Đã đặt lại mật khẩu cho tài khoản ${resetUser.username} thành công!`);
     setResetUser(null);
     setNewPasswordInput('');
     if (onRefreshData) onRefreshData();

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Leaf, Lock, User as UserIcon, ArrowRight, ShieldCheck, KeyRound, AlertCircle, Sparkles } from 'lucide-react';
 import { StorageService } from '../services/storage';
+import { CloudService } from '../services/cloudService';
 import { verifyPassword } from '../utils/crypto';
 import { Role, User } from '../types';
 
@@ -28,13 +29,25 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess, onOpenCwmGuide }) 
     setIsLoading(true);
 
     try {
-      const users = StorageService.getUsers();
-      const user = users.find(
+      let users = StorageService.getUsers();
+      let user = users.find(
         (u) =>
           u.username.toLowerCase() === username.trim().toLowerCase() ||
           u.phone === username.trim() ||
           (u.householdId && u.householdId.toLowerCase() === username.trim().toLowerCase())
       );
+
+      // Nếu không tìm thấy trong bộ nhớ cục bộ, tự động tải phiên bản mới nhất từ Cloud Server
+      if (!user) {
+        await CloudService.loadFromCloud();
+        users = StorageService.getUsers();
+        user = users.find(
+          (u) =>
+            u.username.toLowerCase() === username.trim().toLowerCase() ||
+            u.phone === username.trim() ||
+            (u.householdId && u.householdId.toLowerCase() === username.trim().toLowerCase())
+        );
+      }
 
       if (!user) {
         setError('Tên đăng nhập hoặc mật khẩu không chính xác.');
