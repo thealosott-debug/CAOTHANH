@@ -21,6 +21,7 @@ interface HeaderProps {
   onLogout: () => void;
   onOpenCwmGuide: () => void;
   onSyncSheets: () => void;
+  onOpenUserGuide?: () => void;
   onSwitchUser?: (role: Role, householdId?: string) => void;
 }
 
@@ -31,6 +32,7 @@ export const Header: React.FC<HeaderProps> = ({
   onLogout,
   onOpenCwmGuide,
   onSyncSheets,
+  onOpenUserGuide,
   onSwitchUser,
 }) => {
   return (
@@ -119,47 +121,16 @@ export const Header: React.FC<HeaderProps> = ({
               <span className="hidden sm:inline">Sổ tay CWM</span>
             </button>
 
-            {/* Quick Demo Role Switcher for Evaluators & Teachers */}
-            {onSwitchUser && (
-              <div className="hidden xl:flex items-center space-x-1 bg-emerald-950/60 p-1 rounded-xl border border-emerald-800 text-[11px]">
-                <span className="text-emerald-400 px-1 font-medium">Demo:</span>
-                <button
-                  onClick={() => onSwitchUser('ADMIN')}
-                  className={`px-2 py-0.5 rounded-lg transition-colors ${
-                    currentUser?.role === 'ADMIN' ? 'bg-emerald-600 text-white font-bold' : 'text-emerald-300 hover:bg-emerald-900'
-                  }`}
-                >
-                  Admin
-                </button>
-                <button
-                  onClick={() => onSwitchUser('RESEARCHER')}
-                  className={`px-2 py-0.5 rounded-lg transition-colors ${
-                    currentUser?.role === 'RESEARCHER' ? 'bg-emerald-600 text-white font-bold' : 'text-emerald-300 hover:bg-emerald-900'
-                  }`}
-                >
-                  NC Viên
-                </button>
-                <button
-                  onClick={() => onSwitchUser('HOUSEHOLD', 'H01')}
-                  className={`px-2 py-0.5 rounded-lg transition-colors ${
-                    currentUser?.role === 'HOUSEHOLD' && currentUser.householdId === 'H01'
-                      ? 'bg-emerald-600 text-white font-bold'
-                      : 'text-emerald-300 hover:bg-emerald-900'
-                  }`}
-                >
-                  Hộ TN (H01)
-                </button>
-                <button
-                  onClick={() => onSwitchUser('HOUSEHOLD', 'H21')}
-                  className={`px-2 py-0.5 rounded-lg transition-colors ${
-                    currentUser?.role === 'HOUSEHOLD' && currentUser.householdId === 'H21'
-                      ? 'bg-emerald-600 text-white font-bold'
-                      : 'text-emerald-300 hover:bg-emerald-900'
-                  }`}
-                >
-                  Hộ ĐC (H21)
-                </button>
-              </div>
+            {/* Hướng dẫn sử dụng chi tiết Button */}
+            {onOpenUserGuide && (
+              <button
+                onClick={onOpenUserGuide}
+                className="flex items-center space-x-1.5 px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-950/40 border border-emerald-500/60 transition-all"
+                title="Mở Sổ tay hướng dẫn sử dụng toàn diện chi tiết nhất"
+              >
+                <BookOpen className="w-4 h-4 text-emerald-200" />
+                <span className="hidden md:inline">Hướng dẫn sử dụng</span>
+              </button>
             )}
 
             {/* User Profile & Role Badge */}

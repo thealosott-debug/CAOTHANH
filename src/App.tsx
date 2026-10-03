@@ -24,12 +24,14 @@ import { AuditLogPage } from './pages/AuditLogPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { HouseholdPortal } from './pages/HouseholdPortal';
 import { CloudService } from './services/cloudService';
+import { UserGuideModal } from './components/UserGuideModal';
 import { Menu } from 'lucide-react';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [activeTab, setActiveTab] = useState<ActiveTab>('DASHBOARD');
   const [isCwmGuideOpen, setIsCwmGuideOpen] = useState(false);
+  const [isUserGuideOpen, setIsUserGuideOpen] = useState(false);
   const [isSidebarMobileOpen, setIsSidebarMobileOpen] = useState(false);
   const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>(StorageService.getSyncStatus());

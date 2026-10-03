@@ -16,6 +16,7 @@ import {
   Settings,
   X,
   Sparkles,
+  BookOpen,
 } from 'lucide-react';
 import { Role } from '../types';
 
@@ -43,6 +44,7 @@ interface SidebarProps {
   onSelectTab: (tab: ActiveTab) => void;
   isOpenMobile: boolean;
   onCloseMobile: () => void;
+  onOpenUserGuide?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -51,6 +53,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onSelectTab,
   isOpenMobile,
   onCloseMobile,
+  onOpenUserGuide,
 }) => {
   const isAdmin = role === 'ADMIN';
   const isSupervisorOrAdmin = role === 'ADMIN' || role === 'SUPERVISOR';
@@ -134,6 +137,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
             );
           })}
         </nav>
+
+        {/* Hướng dẫn sử dụng chi tiết */}
+        {onOpenUserGuide && (
+          <div className="p-3 border-t border-slate-800">
+            <button
+              type="button"
+              onClick={() => {
+                onOpenUserGuide();
+                onCloseMobile();
+              }}
+              className="w-full flex items-center justify-center space-x-2 py-2 px-3 bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-700/60 text-emerald-200 hover:text-white rounded-xl text-xs font-bold transition-all shadow-xs"
+            >
+              <BookOpen className="w-4 h-4 text-emerald-300" />
+              <span>Hướng dẫn sử dụng</span>
+            </button>
+          </div>
+        )}
 
         {/* Version footer */}
         <div className="p-3 border-t border-slate-800 text-[10px] text-slate-500 text-center">
