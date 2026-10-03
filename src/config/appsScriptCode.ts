@@ -4,7 +4,7 @@
 export const APPS_SCRIPT_SOURCE_CODE = `/**
  * =========================================================================
  * GOOGLE APPS SCRIPT CHO HỆ THỐNG QUẢN LÝ NGHIÊN CỨU "CAM KẾT XANH"
- * Tác động của 'Cam kết xanh' kết hợp ứng dụng chăn nuôi đến quản lý chất thải tại nguồn
+ * Tác động của ‘Cam kết xanh’ kết hợp ứng dụng quản lý chăn nuôi đến hành vi quản lý chất thải tại nguồn của các hộ chăn nuôi
  * =========================================================================
  * HƯỚNG DẪN 3 BƯỚC:
  * 1. Mở trang Google Sheets của bạn -> Vào menu "Tiện ích mở rộng" (Extensions) -> "Apps Script"
@@ -76,8 +76,24 @@ function doPost(e) {
           var numRows = rows.length;
           var numCols = rows[0].length;
 
+          // Chuẩn hóa đảm bảo tất cả hàng có đúng numCols phần tử và không có giá trị undefined/null
+          var sanitizedRows = [];
+          for (var r = 0; r < numRows; r++) {
+            var row = rows[r] || [];
+            var newRow = [];
+            for (var c = 0; c < numCols; c++) {
+              var val = row[c];
+              if (val === undefined || val === null) {
+                newRow.push('');
+              } else {
+                newRow.push(val);
+              }
+            }
+            sanitizedRows.push(newRow);
+          }
+
           var range = sheet.getRange(1, 1, numRows, numCols);
-          range.setValues(rows);
+          range.setValues(sanitizedRows);
 
           // Định dạng tiêu đề màu xanh ngọc bảo NCKH
           var headerRange = sheet.getRange(1, 1, 1, numCols);

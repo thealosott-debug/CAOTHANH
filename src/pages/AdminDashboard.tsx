@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   Users,
   CheckCircle,
@@ -17,8 +17,14 @@ import {
 import { StorageService } from '../services/storage';
 import { compareInterventionAndControl } from '../utils/statistics';
 import { COMMON_BARRIERS } from '../config/initialData';
+import { User } from '../types';
 
-export const AdminDashboard: React.FC = () => {
+interface AdminDashboardProps {
+  currentUser?: User | null;
+  onRefreshData?: () => void;
+}
+
+export const AdminDashboard: React.FC<AdminDashboardProps> = () => {
   const households = StorageService.getHouseholds();
   const bc02List = StorageService.getBC02List();
   const bc03List = StorageService.getBC03List();
@@ -100,8 +106,8 @@ export const AdminDashboard: React.FC = () => {
               </span>
               <span className="text-xs text-slate-400">• Cập nhật thời gian thực</span>
             </div>
-            <h1 className="text-xl sm:text-2xl font-black text-slate-900 mt-1">
-              Đề tài: "Tác động của Cam kết xanh đến hành vi quản lý chất thải tại nguồn"
+            <h1 className="text-xl sm:text-2xl font-black text-slate-900 mt-1 leading-snug">
+              Đề tài: "{StorageService.getConfig().researchTitle}"
             </h1>
             <p className="text-xs text-slate-600 mt-1">
               Thiết kế nghiên cứu: Can thiệp bán thực nghiệm có đối chứng (Quasi-experimental Pretest-Posttest Control Group Design)
@@ -118,6 +124,18 @@ export const AdminDashboard: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Thông báo nếu chưa có dữ liệu */}
+      {totalHouseholds === 0 && (
+        <div className="bg-amber-50/80 border border-amber-200 rounded-2xl p-4 flex items-center justify-between text-xs text-amber-900 shadow-2xs">
+          <div className="flex items-center space-x-2.5">
+            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+            <span>
+              Hệ thống hiện chưa có danh sách hộ chăn nuôi thực địa. Để nạp dữ liệu từ file Excel chuẩn hoặc nạp lại bộ dữ liệu DEMO, vui lòng truy cập menu <strong>Cài đặt hệ thống</strong> hoặc <strong>Quản lý Hộ</strong>.
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* 8 KPI Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">

@@ -53,11 +53,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onCloseMobile,
 }) => {
   const isAdmin = role === 'ADMIN';
+  const isSupervisorOrAdmin = role === 'ADMIN' || role === 'SUPERVISOR';
 
   const menuItems = [
     { id: 'DASHBOARD' as ActiveTab, label: 'Dashboard Nghiên cứu', icon: LayoutDashboard },
-    { id: 'HOUSEHOLDS' as ActiveTab, label: 'Quản lý Hộ (40 Hộ)', icon: Users },
-    ...(isAdmin ? [{ id: 'ACCOUNTS' as ActiveTab, label: 'Quản lý Tài khoản', icon: UserCheck }] : []),
+    { id: 'HOUSEHOLDS' as ActiveTab, label: 'Quản lý Hộ chăn nuôi', icon: Users },
+    ...(isSupervisorOrAdmin ? [{ id: 'ACCOUNTS' as ActiveTab, label: 'Quản lý Cán bộ & Tài khoản', icon: UserCheck }] : []),
     { id: 'BC01' as ActiveTab, label: 'BC-01: Thông tin hộ', icon: FileText },
     { id: 'BC02' as ActiveTab, label: 'BC-02: Khảo sát KAP trước', icon: FileCheck2 },
     { id: 'BC03' as ActiveTab, label: 'BC-03: Ý định thay đổi', icon: CheckSquare },

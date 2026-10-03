@@ -3,7 +3,7 @@
  * Đề tài: Tác động của 'Cam kết xanh' kết hợp ứng dụng quản lý chăn nuôi đến hành vi quản lý chất thải tại nguồn
  */
 
-export type Role = 'ADMIN' | 'RESEARCHER' | 'HOUSEHOLD';
+export type Role = 'ADMIN' | 'SUPERVISOR' | 'RESEARCHER' | 'HOUSEHOLD';
 
 export type StudyGroup = 'TN' | 'DC'; // TN: Can thiệp, DC: Đối chứng
 
@@ -18,6 +18,8 @@ export interface User {
   email?: string;
   phone: string;
   role: Role;
+  title?: string; // Học hàm, học vị (PGS.TS, TS, ThS, KS...) hoặc chức danh
+  organization?: string; // Đơn vị công tác, cơ quan
   householdId?: string; // Nếu là hộ chăn nuôi thì liên kết với mã hộ (H01..H40)
   status: AccountStatus;
   passwordHash: string;
@@ -247,7 +249,7 @@ export interface AuditLog {
   userId: string;
   username: string;
   userRole: Role;
-  action: 'CREATE' | 'UPDATE' | 'DELETE' | 'LOCK' | 'UNLOCK' | 'RANDOMIZE' | 'SYNC' | 'RESET';
+  action: 'CREATE' | 'UPDATE' | 'DELETE' | 'LOCK' | 'UNLOCK' | 'RANDOMIZE' | 'SYNC' | 'RESET' | 'IMPORT_EXCEL';
   targetModule: string;
   householdId?: string;
   oldValue?: string;

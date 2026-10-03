@@ -82,6 +82,8 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess, onOpenCwmGuide }) 
 
     if (role === 'ADMIN') {
       targetUser = users.find((u) => u.role === 'ADMIN');
+    } else if (role === 'SUPERVISOR') {
+      targetUser = users.find((u) => u.role === 'SUPERVISOR');
     } else if (role === 'RESEARCHER') {
       targetUser = users.find((u) => u.role === 'RESEARCHER');
     } else if (role === 'HOUSEHOLD') {
@@ -91,6 +93,14 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess, onOpenCwmGuide }) 
     if (targetUser) {
       StorageService.setCurrentUser(targetUser);
       onLoginSuccess(targetUser);
+    } else {
+      setError(
+        role === 'ADMIN'
+          ? 'Chưa tìm thấy tài khoản Quản trị viên.'
+          : role === 'SUPERVISOR'
+          ? 'Chưa có tài khoản Người hướng dẫn. Vui lòng đăng nhập Admin để tạo hoặc nhập từ file Excel.'
+          : `Chưa có tài khoản ${role === 'RESEARCHER' ? 'Nghiên cứu viên' : 'Hộ chăn nuôi'}. Vui lòng đăng nhập tài khoản Quản trị viên (admin / admin123) để tạo.`
+      );
     }
   };
 
@@ -115,8 +125,8 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess, onOpenCwmGuide }) 
           <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight uppercase mt-2">
             GREEN FARM RESEARCH
           </h1>
-          <p className="text-xs text-slate-300 max-w-sm mx-auto leading-relaxed">
-            Hệ thống Quản lý Dữ liệu Nghiên cứu Thực nghiệm: Tác động của 'Cam kết xanh' đến quản lý chất thải tại nguồn
+          <p className="text-xs text-slate-300 max-w-md mx-auto leading-relaxed">
+            Hệ thống Quản lý Dữ liệu Nghiên cứu Thực nghiệm: Tác động của ‘Cam kết xanh’ kết hợp ứng dụng quản lý chăn nuôi đến hành vi quản lý chất thải tại nguồn của các hộ chăn nuôi
           </p>
         </div>
       </div>

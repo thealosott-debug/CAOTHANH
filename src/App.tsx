@@ -45,13 +45,23 @@ export default function App() {
 
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
+    const handleSyncStatusUpdate = () => {
+      setSyncStatus(StorageService.getSyncStatus());
+    };
 
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
+    window.addEventListener('gfr_data_change', handleSyncStatusUpdate);
+
+    const interval = setInterval(() => {
+      setSyncStatus(StorageService.getSyncStatus());
+    }, 2000);
 
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('gfr_data_change', handleSyncStatusUpdate);
+      clearInterval(interval);
     };
   }, []);
 
@@ -88,6 +98,8 @@ export default function App() {
     let target: User | undefined;
     if (role === 'ADMIN') {
       target = users.find((u) => u.role === 'ADMIN');
+    } else if (role === 'SUPERVISOR') {
+      target = users.find((u) => u.role === 'SUPERVISOR');
     } else if (role === 'RESEARCHER') {
       target = users.find((u) => u.role === 'RESEARCHER');
     } else if (role === 'HOUSEHOLD') {
@@ -189,7 +201,13 @@ export default function App() {
 
         {/* Main Content Area */}
         <main className="flex-1 overflow-y-auto">
-          {activeTab === 'DASHBOARD' && <AdminDashboard key={refreshKey} />}
+          {activeTab === 'DASHBOARD' && (
+            <AdminDashboard
+              key={refreshKey}
+              currentUser={currentUser}
+              onRefreshData={handleRefreshData}
+            />
+          )}
           {activeTab === 'HOUSEHOLDS' && (
             <HouseholdManagement
               key={refreshKey}

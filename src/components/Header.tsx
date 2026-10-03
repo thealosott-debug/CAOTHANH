@@ -174,13 +174,17 @@ export const Header: React.FC<HeaderProps> = ({
                       className={`text-[10px] font-bold px-1.5 py-0.2 rounded-md ${
                         currentUser.role === 'ADMIN'
                           ? 'bg-purple-900/80 text-purple-200 border border-purple-700'
+                          : currentUser.role === 'SUPERVISOR'
+                          ? 'bg-amber-900/80 text-amber-200 border border-amber-700'
                           : currentUser.role === 'RESEARCHER'
                           ? 'bg-blue-900/80 text-blue-200 border border-blue-700'
-                          : 'bg-amber-900/80 text-amber-200 border border-amber-700'
+                          : 'bg-emerald-900/80 text-emerald-200 border border-emerald-700'
                       }`}
                     >
                       {currentUser.role === 'ADMIN'
                         ? 'ADMIN'
+                        : currentUser.role === 'SUPERVISOR'
+                        ? 'HƯỚNG DẪN'
                         : currentUser.role === 'RESEARCHER'
                         ? 'NC VIÊN'
                         : `HỘ ${currentUser.householdId}`}

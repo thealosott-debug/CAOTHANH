@@ -106,16 +106,16 @@ export const GoogleSheetsSync: React.FC<GoogleSheetsSyncProps> = ({
 
       {/* Permanent Fixed Link Banner */}
       <div className="bg-emerald-50 border-2 border-emerald-500 rounded-2xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-xs">
-        <div className="flex items-start space-x-3">
+        <div className="flex items-start space-x-3 flex-1 min-w-0">
           <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-sm">
             <CheckCircle className="w-6 h-6" />
           </div>
-          <div>
-            <div className="flex items-center space-x-2">
+          <div className="flex-1 min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="font-black text-emerald-950 text-sm">
                 LIÊN KẾT GOOGLE APPS SCRIPT ĐÃ ĐƯỢC LƯU CỐ ĐỊNH VÀO PHẦN MỀM
               </span>
-              <span className="bg-emerald-700 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
+              <span className="bg-emerald-700 text-white text-[10px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap">
                 ONLINE READY
               </span>
             </div>

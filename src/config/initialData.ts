@@ -1,6 +1,6 @@
 /**
  * Dữ liệu khởi tạo & Cấu hình nghiên cứu chuẩn
- * Đề tài: Tác động của ‘Cam kết xanh’ kết hợp ứng dụng quản lý chăn nuôi đến hành vi quản lý chất thải tại nguồn
+ * Đề tài: Tác động của ‘Cam kết xanh’ kết hợp ứng dụng quản lý chăn nuôi đến hành vi quản lý chất thải tại nguồn của các hộ chăn nuôi
  */
 
 import { Household, ResearchConfig, User } from '../types';
@@ -241,100 +241,23 @@ export const COMMON_BARRIERS = [
   { id: 'B_WEATHER', label: 'Thời tiết mưa bão gây ngập úng tràn phân' }
 ];
 
-// Dữ liệu ban đầu của 3 tài khoản mặc định
+// Dữ liệu tài khoản quản trị viên duy nhất ban đầu
 export const DEFAULT_USERS: User[] = [
   {
     id: 'USR_ADMIN_01',
     username: 'admin',
-    fullName: 'TS. Nguyễn Văn Hùng (Chủ nhiệm đề tài)',
-    email: 'admin.greenfarm@research.vn',
-    phone: '0912345678',
+    fullName: 'Quản trị viên (Chủ nhiệm đề tài)',
+    email: 'admin@research.vn',
+    phone: '',
     role: 'ADMIN',
     status: 'ACTIVE',
     passwordHash: '', // Sẽ được tính với salt khi khởi tạo
     salt: 'SALT_ADMIN_999',
-    createdAt: '2026-09-01T08:00:00Z',
-  },
-  {
-    id: 'USR_RESEARCHER_01',
-    username: 'nghiencuu01',
-    fullName: 'ThS. Trần Thị Mai (Nghiên cứu viên chính)',
-    email: 'mai.tran@research.vn',
-    phone: '0987654321',
-    role: 'RESEARCHER',
-    status: 'ACTIVE',
-    passwordHash: '',
-    salt: 'SALT_RES_888',
-    createdAt: '2026-09-01T08:30:00Z',
-  },
-  {
-    id: 'USR_RESEARCHER_02',
-    username: 'nghiencuu02',
-    fullName: 'KS. Lê Hoàng Long (Kỹ thuật viên thực địa)',
-    email: 'long.le@research.vn',
-    phone: '0977112233',
-    role: 'RESEARCHER',
-    status: 'ACTIVE',
-    passwordHash: '',
-    salt: 'SALT_RES_777',
-    createdAt: '2026-09-01T09:00:00Z',
+    createdAt: new Date().toISOString(),
   }
 ];
 
-// Khởi tạo danh sách 40 hộ nghiên cứu chuẩn (H01 đến H40)
-// H01 - H20: Nhóm Can thiệp (TN)
-// H21 - H40: Nhóm Đối chứng (ĐC)
+// Danh sách hộ chăn nuôi ban đầu: Để trống hoàn toàn để nhập dữ liệu thực tế
 export function generateInitialHouseholds(): Household[] {
-  const households: Household[] = [];
-  const representativeNames = [
-    'Nguyễn Văn An', 'Trần Đình Bình', 'Lê Văn Cường', 'Phạm Quốc Dũng', 'Vũ Thị Em',
-    'Hoàng Văn Phúc', 'Đặng Thành Giàu', 'Bùi Văn Hải', 'Đỗ Minh Khang', 'Hồ Xuân Lam',
-    'Ngô Quang Minh', 'Lý Quốc Nam', 'Dương Văn Oanh', 'Mai Thế Phong', 'Trịnh Bá Quân',
-    'Lương Văn Rạng', 'Phan Văn Sáng', 'Tạ Đình Tài', 'Võ Hoàng Uy', 'Cao Văn Vinh',
-    // Đối chứng
-    'Bùi Thị Xuân', 'Nguyễn Đức Yên', 'Trần Văn Bắc', 'Phạm Hữu Cảnh', 'Lê Đình Danh',
-    'Hoàng Thế Giang', 'Vũ Văn Hậu', 'Đặng Quốc Kiên', 'Đỗ Văn Lợi', 'Hồ Minh Nghĩa',
-    'Ngô Thị Phượng', 'Lý Văn Quý', 'Dương Đình Sang', 'Mai Văn Tấn', 'Trịnh Hữu Thông',
-    'Lương Thế Vĩ', 'Phan Bá Vượng', 'Tạ Văn Xuân', 'Võ Thị Yến', 'Cao Minh Triết'
-  ];
-
-  const livestockTypes = ['Lợn thịt', 'Lợn nái & thịt', 'Bò thịt', 'Bò sữa', 'Gà thịt thả vườn', 'Vịt đẻ trứng', 'Gia cầm tổng hợp'];
-  const farmingTypes = ['Gia trại chuồng hở', 'Gia trại bán kín', 'Chuồng kín có quạt hút', 'Bán chăn thả có sân chơi'];
-  const wasteMethods = ['Biogas composite', 'Ủ phân luống có bạt phủ', 'Hầm biogas xây gạch', 'Chưa có hệ thống bài bản', 'Bán phân tươi hàng ngày'];
-
-  for (let i = 1; i <= 40; i++) {
-    const id = `H${i.toString().padStart(2, '0')}`;
-    const isTN = i <= 20; // 20 hộ đầu là TN, 20 hộ sau là ĐC
-    const repName = representativeNames[i - 1];
-    const phone = `09${Math.floor(10000000 + (i * 219731) % 89999999)}`;
-    const livestock = livestockTypes[(i - 1) % livestockTypes.length];
-    const farming = farmingTypes[(i - 1) % farmingTypes.length];
-    const waste = wasteMethods[(i - 1) % wasteMethods.length];
-    const herdSize = (livestock.includes('Lợn') ? 30 + (i * 7) % 120 : (livestock.includes('Bò') ? 5 + (i * 2) % 25 : 300 + (i * 120) % 2000));
-
-    households.push({
-      id,
-      representativeName: repName,
-      phone,
-      address: `Thôn ${(i % 4) + 1}, Xã Tân Lập, Huyện Yên Định, Tỉnh Thanh Hóa`,
-      livestockType: livestock,
-      herdSize,
-      farmingYears: 3 + (i % 18),
-      farmingType: farming,
-      currentWasteMethod: waste,
-      group: isTN ? 'TN' : 'DC',
-      accountStatus: 'ACTIVE',
-      joinedDate: '2026-09-01',
-      assignedResearcher: i % 2 === 0 ? 'ThS. Trần Thị Mai' : 'KS. Lê Hoàng Long',
-      randomizedAt: '2026-09-02T10:00:00Z',
-      randomizedBy: 'admin',
-      notes: `Hộ chăn nuôi điển hình khu vực xã Tân Lập - Tham gia nghiên cứu từ Giai đoạn 0.`,
-      createdAt: '2026-09-01T08:00:00Z',
-      updatedAt: '2026-09-02T10:00:00Z',
-      updatedBy: 'admin',
-      isLocked: false,
-    });
-  }
-
-  return households;
+  return [];
 }

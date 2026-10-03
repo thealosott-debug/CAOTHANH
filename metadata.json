@@ -1,6 +1,6 @@
 {
   "name": "Green Farm Research - Quản lý Nghiên cứu Cam kết Xanh",
-  "description": "Hệ thống quản lý dữ liệu nghiên cứu khoa học: Tác động của Cam kết xanh kết hợp ứng dụng quản lý chăn nuôi đến hành vi quản lý chất thải tại nguồn",
+  "description": "Hệ thống quản lý dữ liệu nghiên cứu khoa học: Tác động của ‘Cam kết xanh’ kết hợp ứng dụng quản lý chăn nuôi đến hành vi quản lý chất thải tại nguồn của các hộ chăn nuôi",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

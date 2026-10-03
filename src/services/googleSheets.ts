@@ -23,7 +23,7 @@ export const RESEARCH_SHEETS: SheetDefinition[] = [
   {
     name: 'USERS',
     description: 'Danh sách tài khoản (không bao giờ lưu mật khẩu thô)',
-    columns: ['USER_ID', 'USERNAME', 'FULL_NAME', 'PHONE', 'ROLE', 'HOUSEHOLD_ID', 'STATUS', 'CREATED_AT']
+    columns: ['USER_ID', 'USERNAME', 'FULL_NAME', 'PHONE', 'ROLE', 'HOUSEHOLD_ID', 'STATUS', 'TITLE', 'ORGANIZATION', 'CREATED_AT']
   },
   {
     name: 'HOUSEHOLDS',
@@ -68,7 +68,7 @@ export const RESEARCH_SHEETS: SheetDefinition[] = [
   {
     name: 'BC07_POST',
     description: 'Phiếu BC-07: Khảo sát sau can thiệp (HT sau & Cảm nhận)',
-    columns: ['RECORD_ID', 'HOUSEHOLD_ID', 'SCORE_HT_POST', 'MAINTENANCE_WILLINGNESS', 'FEEDBACK', 'REMAINING_BARRIERS', 'IS_LOCKED', 'SUBMITTED_BY', 'SUBMITTED_AT']
+    columns: ['RECORD_ID', 'HOUSEHOLD_ID', 'SCORE_HT_POST', 'B1_THU_GOM', 'B2_PHAN_LOAI', 'B3_LUU_CHUA', 'B4_KHONG_XA', 'B5_XU_LY', 'B6_VE_SINH', 'MAINTENANCE_WILLINGNESS', 'FEEDBACK', 'REMAINING_BARRIERS', 'IS_LOCKED', 'SUBMITTED_BY', 'SUBMITTED_AT']
   },
   {
     name: 'BC08_TONG_HOP',
@@ -136,12 +136,14 @@ export class GoogleSheetsService {
       ['REMINDER_TIME', config.reminderTime, 'Giờ gửi nhắc nhở', new Date().toISOString()],
       ['START_DATE', config.startDate, 'Ngày bắt đầu nghiên cứu', new Date().toISOString()],
       ['END_DATE', config.endDate, 'Ngày kết thúc nghiên cứu', new Date().toISOString()],
+      ['SPREADSHEET_ID', config.spreadsheetId || '', 'ID Google Spreadsheet liên kết', new Date().toISOString()],
+      ['APPS_SCRIPT_URL', config.appsScriptUrl || '', 'URL Web App tiếp nhận dữ liệu', new Date().toISOString()],
     ];
 
     // 2. USERS (Không đưa mật khẩu ra)
     payload['USERS'] = [
-      ['USER_ID', 'USERNAME', 'FULL_NAME', 'PHONE', 'ROLE', 'HOUSEHOLD_ID', 'STATUS', 'CREATED_AT'],
-      ...users.map(u => [u.id, u.username, u.fullName, u.phone, u.role, u.householdId || '', u.status, u.createdAt])
+      ['USER_ID', 'USERNAME', 'FULL_NAME', 'PHONE', 'ROLE', 'HOUSEHOLD_ID', 'STATUS', 'TITLE', 'ORGANIZATION', 'CREATED_AT'],
+      ...users.map(u => [u.id, u.username, u.fullName, u.phone, u.role, u.householdId || '', u.status, u.title || '', u.organization || '', u.createdAt])
     ];
 
     // 3. HOUSEHOLDS
@@ -249,9 +251,16 @@ export class GoogleSheetsService {
 
     // 11. BC07_POST
     payload['BC07_POST'] = [
-      ['RECORD_ID', 'HOUSEHOLD_ID', 'SCORE_HT_POST', 'MAINTENANCE_WILLINGNESS', 'FEEDBACK', 'REMAINING_BARRIERS', 'IS_LOCKED', 'SUBMITTED_BY', 'SUBMITTED_AT'],
+      ['RECORD_ID', 'HOUSEHOLD_ID', 'SCORE_HT_POST', 'B1_THU_GOM', 'B2_PHAN_LOAI', 'B3_LUU_CHUA', 'B4_KHONG_XA', 'B5_XU_LY', 'B6_VE_SINH', 'MAINTENANCE_WILLINGNESS', 'FEEDBACK', 'REMAINING_BARRIERS', 'IS_LOCKED', 'SUBMITTED_BY', 'SUBMITTED_AT'],
       ...bc07List.map(b => [
-        b.id, b.householdId, b.scoreHT_Post, b.maintenanceWillingness,
+        b.id, b.householdId, b.scoreHT_Post,
+        b.behaviorReport?.b1_thuGom ? 1 : 0,
+        b.behaviorReport?.b2_phanLoai ? 1 : 0,
+        b.behaviorReport?.b3_luuChua ? 1 : 0,
+        b.behaviorReport?.b4_khongXaThang ? 1 : 0,
+        b.behaviorReport?.b5_xuLyTaiSuDung ? 1 : 0,
+        b.behaviorReport?.b6_veSinh ? 1 : 0,
+        b.maintenanceWillingness,
         b.feedbackProcess, b.mainBarriers.join('; '),
         b.isLocked ? 'CÓ' : 'KHÔNG', b.submittedBy, b.submittedAt
       ])
@@ -317,6 +326,22 @@ export class GoogleSheetsService {
     const dcCount = households.filter(h => h.group === 'DC').length;
     const preCwmDone = bc04List.filter(b => b.stage === 'PRE').length;
     const postCwmDone = bc04List.filter(b => b.stage === 'POST').length;
+    const greenCommitmentsDone = bc05List.filter(b => b.confirmed).length;
+
+    const tnPreScores = bc08List.filter(b => b.group === 'TN' && b.scoreCWM_Pre !== null).map(b => b.scoreCWM_Pre as number);
+    const tnPostScores = bc08List.filter(b => b.group === 'TN' && b.scoreCWM_Post !== null).map(b => b.scoreCWM_Post as number);
+    const dcPreScores = bc08List.filter(b => b.group === 'DC' && b.scoreCWM_Pre !== null).map(b => b.scoreCWM_Pre as number);
+    const dcPostScores = bc08List.filter(b => b.group === 'DC' && b.scoreCWM_Post !== null).map(b => b.scoreCWM_Post as number);
+
+    const meanTnPre = tnPreScores.length ? (tnPreScores.reduce((a, b) => a + b, 0) / tnPreScores.length).toFixed(2) : '0';
+    const meanTnPost = tnPostScores.length ? (tnPostScores.reduce((a, b) => a + b, 0) / tnPostScores.length).toFixed(2) : '0';
+    const meanDcPre = dcPreScores.length ? (dcPreScores.reduce((a, b) => a + b, 0) / dcPreScores.length).toFixed(2) : '0';
+    const meanDcPost = dcPostScores.length ? (dcPostScores.reduce((a, b) => a + b, 0) / dcPostScores.length).toFixed(2) : '0';
+
+    const deltaTn = (parseFloat(meanTnPost) - parseFloat(meanTnPre)).toFixed(2);
+    const deltaDc = (parseFloat(meanDcPost) - parseFloat(meanDcPre)).toFixed(2);
+    const diffDelta = (parseFloat(deltaTn) - parseFloat(deltaDc)).toFixed(2);
+
     payload['DASHBOARD_DATA'] = [
       ['METRIC_NAME', 'VALUE', 'UNIT', 'LAST_CALCULATED_AT'],
       ['TOTAL_HOUSEHOLDS', households.length, 'hộ', new Date().toISOString()],
@@ -324,8 +349,31 @@ export class GoogleSheetsService {
       ['DC_COUNT', dcCount, 'hộ', new Date().toISOString()],
       ['PRE_CWM_OBSERVED', preCwmDone, 'hộ', new Date().toISOString()],
       ['POST_CWM_OBSERVED', postCwmDone, 'hộ', new Date().toISOString()],
-      ['GREEN_COMMITMENT_CONFIRMED', bc05List.filter(b => b.confirmed).length, 'hộ', new Date().toISOString()]
+      ['GREEN_COMMITMENT_CONFIRMED', greenCommitmentsDone, 'hộ', new Date().toISOString()],
+      ['MEAN_CWM_PRE_TN', meanTnPre, 'điểm (thang 0-6)', new Date().toISOString()],
+      ['MEAN_CWM_POST_TN', meanTnPost, 'điểm (thang 0-6)', new Date().toISOString()],
+      ['MEAN_CWM_PRE_DC', meanDcPre, 'điểm (thang 0-6)', new Date().toISOString()],
+      ['MEAN_CWM_POST_DC', meanDcPost, 'điểm (thang 0-6)', new Date().toISOString()],
+      ['DELTA_CWM_TN', deltaTn, 'điểm', new Date().toISOString()],
+      ['DELTA_CWM_DC', deltaDc, 'điểm', new Date().toISOString()],
+      ['DIFFERENCE_MEAN_DELTA', diffDelta, 'điểm', new Date().toISOString()],
+      ['COMPLETION_RATE', households.length > 0 ? Math.round((postCwmDone / households.length) * 100) : 0, '%', new Date().toISOString()],
     ];
+
+    // Chuẩn hóa và làm sạch tuyệt đối: mọi hàng cùng số cột, không có null/undefined
+    for (const sheetName in payload) {
+      const rows = payload[sheetName];
+      if (!rows || rows.length === 0) continue;
+      const maxCols = Math.max(...rows.map(r => r.length));
+      payload[sheetName] = rows.map(row => {
+        const newRow: any[] = [];
+        for (let i = 0; i < maxCols; i++) {
+          const val = row[i];
+          newRow.push(val === undefined || val === null ? '' : val);
+        }
+        return newRow;
+      });
+    }
 
     return payload;
   }
@@ -446,4 +494,40 @@ export class GoogleSheetsService {
       };
     }
   }
+
+  private static autoSyncTimer: any = null;
+
+  /**
+   * Tự động lên lịch đẩy 17 sheets lên Google Sheets (Debounce 1.5s để gom nhóm các thay đổi liên tiếp)
+   */
+  static scheduleAutoSync(delayMs: number = 1500): void {
+    if (this.autoSyncTimer) {
+      clearTimeout(this.autoSyncTimer);
+    }
+    StorageService.setSyncStatus('PENDING');
+    this.autoSyncTimer = setTimeout(async () => {
+      try {
+        if (typeof navigator !== 'undefined' && !navigator.onLine) {
+          StorageService.setSyncStatus('PENDING');
+          return;
+        }
+        await this.syncToGoogleSheets();
+      } catch (e) {
+        console.warn('Lên lịch đồng bộ nền Google Sheets chưa thành công:', e);
+        StorageService.setSyncStatus('PENDING');
+      }
+    }, delayMs);
+  }
+}
+
+// Tự động kết nối cơ chế auto-sync với sự kiện thay đổi dữ liệu trong StorageService
+StorageService.onDataChange(() => {
+  GoogleSheetsService.scheduleAutoSync();
+});
+
+// Khi kết nối Internet khôi phục, tự động đẩy dữ liệu lên Google Sheets
+if (typeof window !== 'undefined') {
+  window.addEventListener('online', () => {
+    GoogleSheetsService.scheduleAutoSync(500);
+  });
 }

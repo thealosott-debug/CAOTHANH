@@ -14,10 +14,14 @@ import {
   AlertCircle,
   X,
   Save,
+  Trash2,
+  Download,
 } from 'lucide-react';
-import { Household, Role, StudyGroup, User } from '../types';
+import { BC01Record, Household, Role, StudyGroup, User } from '../types';
 import { StorageService } from '../services/storage';
 import { UnlockModal } from '../components/UnlockModal';
+import { ExcelImportModal } from '../components/ExcelImportModal';
+import { ExcelImportService } from '../services/excelImportService';
 
 interface HouseholdManagementProps {
   currentUser: User;
@@ -34,6 +38,9 @@ export const HouseholdManagement: React.FC<HouseholdManagementProps> = ({
   const [filterGroup, setFilterGroup] = useState<StudyGroup | 'ALL'>('ALL');
   const [filterLivestock, setFilterLivestock] = useState<string>('ALL');
 
+  // Modal Excel
+  const [isExcelModalOpen, setIsExcelModalOpen] = useState(false);
+
   // Modal thêm / sửa hộ
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingHousehold, setEditingHousehold] = useState<Household | null>(null);
@@ -44,19 +51,23 @@ export const HouseholdManagement: React.FC<HouseholdManagementProps> = ({
   const [newGroupSelected, setNewGroupSelected] = useState<StudyGroup>('TN');
   const [groupChangeReason, setGroupChangeReason] = useState('');
 
+  const availableResearchers = StorageService.getUsers().filter(
+    (u) => u.role === 'RESEARCHER' || u.role === 'ADMIN'
+  );
+
   // Form state
   const [formData, setFormData] = useState({
     id: '',
     representativeName: '',
     phone: '',
-    address: 'Xã Tân Lập, Huyện Yên Định, Tỉnh Thanh Hóa',
+    address: '',
     livestockType: 'Lợn thịt',
     herdSize: 50,
-    farmingYears: 5,
+    farmingYears: 3,
     farmingType: 'Gia trại chuồng hở',
     currentWasteMethod: 'Biogas composite',
     group: 'TN' as StudyGroup,
-    assignedResearcher: 'ThS. Trần Thị Mai',
+    assignedResearcher: '',
     notes: '',
   });
 
@@ -85,18 +96,34 @@ export const HouseholdManagement: React.FC<HouseholdManagementProps> = ({
       id: nextId,
       representativeName: '',
       phone: '',
-      address: 'Thôn 1, Xã Tân Lập, Huyện Yên Định, Tỉnh Thanh Hóa',
+      address: '',
       livestockType: 'Lợn thịt',
       herdSize: 50,
-      farmingYears: 5,
+      farmingYears: 3,
       farmingType: 'Gia trại chuồng hở',
       currentWasteMethod: 'Biogas composite',
       group: nextNum <= 20 ? 'TN' : 'DC',
-      assignedResearcher: 'ThS. Trần Thị Mai',
+      assignedResearcher: availableResearchers[0]?.fullName || '',
       notes: '',
     });
     setFormError('');
     setIsModalOpen(true);
+  };
+
+  // Xóa sạch toàn bộ dữ liệu nền mẫu để người dùng tự nhập dữ liệu thực
+  const handleResetToClean = async () => {
+    const confirmClean = window.confirm(
+      'BẠN CÓ CHẮC CHẮN MUỐN XÓA TOÀN BỘ DỮ LIỆU NỀN MẪU?\n\n' +
+      '• Toàn bộ danh sách hộ kinh doanh, người nghiên cứu, các phiếu khảo sát và báo cáo mẫu sẽ được xóa sạch.\n' +
+      '• Hệ thống chỉ giữ lại duy nhất tài khoản Quản trị viên (admin / admin123) để bạn tự nhập dữ liệu thực tế.\n\n' +
+      'Bấm OK để thực hiện ngay.'
+    );
+    if (!confirmClean) return;
+
+    await StorageService.resetToCleanState();
+    setHouseholds([]);
+    alert('Đã xóa sạch toàn bộ dữ liệu mẫu! Giờ bạn có thể bắt đầu nhập dữ liệu thực tế của mình.');
+    if (onRefreshData) onRefreshData();
   };
 
   // Mở modal sửa hộ
@@ -161,6 +188,36 @@ export const HouseholdManagement: React.FC<HouseholdManagementProps> = ({
         StorageService.saveHouseholds(currentList);
         setHouseholds(currentList);
 
+        // Đồng bộ tức thì sang phiếu BC-01 nếu đã tồn tại
+        const bc01List = StorageService.getBC01List();
+        const bc01Index = bc01List.findIndex((b) => b.householdId === updated.id);
+        if (bc01Index >= 0) {
+          bc01List[bc01Index] = {
+            ...bc01List[bc01Index],
+            representativeName: updated.representativeName,
+            phone: updated.phone,
+            address: updated.address,
+            livestockType: updated.livestockType,
+            herdSize: updated.herdSize,
+            farmingYears: updated.farmingYears,
+            farmingType: updated.farmingType,
+            currentWasteMethod: updated.currentWasteMethod,
+            notes: updated.notes,
+            updatedAt: new Date().toISOString(),
+            updatedBy: currentUser.username,
+          };
+          StorageService.saveBC01List(bc01List);
+        }
+
+        // Cập nhật tên và SĐT vào tài khoản người dùng tương ứng
+        const userList = StorageService.getUsers();
+        const uIndex = userList.findIndex((u) => u.householdId === updated.id);
+        if (uIndex >= 0) {
+          userList[uIndex].fullName = updated.representativeName;
+          userList[uIndex].phone = updated.phone;
+          StorageService.saveUsers(userList);
+        }
+
         StorageService.addAuditLog({
           userId: currentUser.id,
           username: currentUser.username,
@@ -199,6 +256,47 @@ export const HouseholdManagement: React.FC<HouseholdManagementProps> = ({
       StorageService.saveHouseholds(currentList);
       setHouseholds(currentList);
 
+      // Khởi tạo ngay phiếu BC-01 tương ứng cho hộ để dữ liệu liên thông hoàn toàn
+      const bc01List = StorageService.getBC01List();
+      const newBc01: BC01Record = {
+        id: `BC01_${newH.id}`,
+        householdId: newH.id,
+        representativeName: newH.representativeName,
+        phone: newH.phone,
+        address: newH.address,
+        livestockType: newH.livestockType,
+        herdSize: newH.herdSize,
+        farmingYears: newH.farmingYears,
+        farmingType: newH.farmingType,
+        currentWasteMethod: newH.currentWasteMethod,
+        notes: newH.notes,
+        isLocked: false,
+        createdAt: new Date().toISOString(),
+        createdBy: currentUser.username,
+        updatedAt: new Date().toISOString(),
+        updatedBy: currentUser.username,
+      };
+      bc01List.push(newBc01);
+      StorageService.saveBC01List(bc01List);
+
+      // Tự động cấp tài khoản đăng nhập cho hộ chăn nuôi nếu chưa có
+      const userList = StorageService.getUsers();
+      if (!userList.some((u) => u.householdId === newH.id || u.username === newH.id.toLowerCase())) {
+        userList.push({
+          id: `USR_${newH.id}`,
+          username: newH.id.toLowerCase(),
+          fullName: newH.representativeName,
+          phone: newH.phone,
+          role: 'HOUSEHOLD',
+          householdId: newH.id,
+          status: 'ACTIVE',
+          passwordHash: '',
+          salt: 'SALT_DEFAULT',
+          createdAt: new Date().toISOString(),
+        });
+        StorageService.saveUsers(userList);
+      }
+
       StorageService.addAuditLog({
         userId: currentUser.id,
         username: currentUser.username,
@@ -211,6 +309,48 @@ export const HouseholdManagement: React.FC<HouseholdManagementProps> = ({
     }
 
     setIsModalOpen(false);
+    if (onRefreshData) onRefreshData();
+  };
+
+  // Xóa một hộ chăn nuôi
+  const handleDeleteHousehold = (h: Household) => {
+    if (!isAdmin) return;
+    const confirmDelete = window.confirm(
+      `BẠN CÓ CHẮC CHẮN MUỐN XÓA HỘ "${h.id} - ${h.representativeName}"?\n\n- Toàn bộ hồ sơ khảo sát và tài khoản liên kết với hộ này sẽ được gỡ bỏ khỏi hệ thống.`
+    );
+    if (!confirmDelete) return;
+
+    // 1. Xóa khỏi danh sách hộ
+    const currentList = StorageService.getHouseholds().filter((item) => item.id !== h.id);
+    StorageService.saveHouseholds(currentList);
+    setHouseholds(currentList);
+
+    // 2. Xóa khỏi BC01
+    const bc01List = StorageService.getBC01List().filter((b) => b.householdId !== h.id);
+    StorageService.saveBC01List(bc01List);
+
+    // 3. Xóa tài khoản người dùng
+    const userList = StorageService.getUsers().filter((u) => u.householdId !== h.id);
+    StorageService.saveUsers(userList);
+
+    // 4. Xóa phiếu khảo sát liên quan
+    StorageService.saveBC02List(StorageService.getBC02List().filter((b) => b.householdId !== h.id));
+    StorageService.saveBC03List(StorageService.getBC03List().filter((b) => b.householdId !== h.id));
+    StorageService.saveBC04List(StorageService.getBC04List().filter((b) => b.householdId !== h.id));
+    StorageService.saveBC05List(StorageService.getBC05List().filter((b) => b.householdId !== h.id));
+    StorageService.saveBC06List(StorageService.getBC06List().filter((b) => b.householdId !== h.id));
+    StorageService.saveBC07List(StorageService.getBC07List().filter((b) => b.householdId !== h.id));
+
+    StorageService.addAuditLog({
+      userId: currentUser.id,
+      username: currentUser.username,
+      userRole: currentUser.role,
+      action: 'DELETE',
+      targetModule: 'HOUSEHOLDS',
+      householdId: h.id,
+      reason: `Admin xóa hộ ${h.id} (${h.representativeName}) khỏi hệ thống nghiên cứu.`,
+    });
+
     if (onRefreshData) onRefreshData();
   };
 
@@ -321,8 +461,33 @@ export const HouseholdManagement: React.FC<HouseholdManagementProps> = ({
           {isAdmin && (
             <>
               <button
+                onClick={() => setIsExcelModalOpen(true)}
+                className="px-3.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-colors shadow-xs"
+                title="Nhập danh sách hộ chăn nuôi nhanh chóng từ file Excel (.xlsx, .xls, .csv)"
+              >
+                <FileSpreadsheet className="w-4 h-4 text-emerald-200" />
+                <span>Nhập từ Excel</span>
+              </button>
+              <button
+                onClick={ExcelImportService.downloadHouseholdTemplate}
+                className="px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-colors shadow-2xs"
+                title="Tải tệp mẫu Excel chuẩn để điền dữ liệu"
+              >
+                <Download className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Tải mẫu Excel</span>
+              </button>
+              <button
+                onClick={handleResetToClean}
+                className="px-3.5 py-2 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-colors shadow-xs"
+                title="Xóa toàn bộ hộ kinh doanh, người nghiên cứu và dữ liệu nền mẫu để nhập dữ liệu thực"
+              >
+                <Trash2 className="w-4 h-4 text-red-600" />
+                <span>Xóa sạch dữ liệu mẫu</span>
+              </button>
+              <button
                 onClick={handleRandomizeGroups}
-                className="px-3.5 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-colors shadow-xs"
+                disabled={households.length === 0}
+                className="px-3.5 py-2 bg-slate-800 hover:bg-slate-900 disabled:opacity-40 text-white rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-colors shadow-xs"
                 title="Phân ngẫu nhiên 20 TN và 20 ĐC theo chuẩn phương pháp nghiên cứu"
               >
                 <Shuffle className="w-4 h-4 text-amber-400" />
@@ -330,10 +495,10 @@ export const HouseholdManagement: React.FC<HouseholdManagementProps> = ({
               </button>
               <button
                 onClick={handleOpenAdd}
-                className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-colors shadow-xs"
+                className="px-4 py-2 bg-slate-900 hover:bg-black text-white rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-colors shadow-xs"
               >
                 <Plus className="w-4 h-4" />
-                <span>Thêm hộ mới</span>
+                <span>Thêm hộ thủ công</span>
               </button>
             </>
           )}
@@ -399,8 +564,42 @@ export const HouseholdManagement: React.FC<HouseholdManagementProps> = ({
             <tbody className="divide-y divide-slate-100 font-medium">
               {filteredHouseholds.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="text-center py-8 text-slate-400">
-                    Không tìm thấy hộ chăn nuôi nào phù hợp.
+                  <td colSpan={8} className="py-12 px-4 text-center">
+                    <div className="max-w-md mx-auto space-y-3">
+                      <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto">
+                        <FileSpreadsheet className="w-6 h-6" />
+                      </div>
+                      <div className="font-extrabold text-slate-800 text-sm">
+                        {households.length === 0
+                          ? 'Chưa có hộ chăn nuôi nào trong hệ thống'
+                          : 'Không tìm thấy hộ nào phù hợp với bộ lọc'}
+                      </div>
+                      <p className="text-xs text-slate-500">
+                        {households.length === 0
+                          ? 'Bạn có thể nhập toàn bộ danh sách 40 hộ nhanh chóng bằng tệp Excel (.xlsx) chuẩn hoặc nhập thủ công từng hộ.'
+                          : 'Thử tìm kiếm với từ khóa khác hoặc bỏ chọn bộ lọc nhóm/vật nuôi.'}
+                      </p>
+                      {households.length === 0 && isAdmin && (
+                        <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
+                          <button
+                            type="button"
+                            onClick={() => setIsExcelModalOpen(true)}
+                            className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold flex items-center space-x-1.5 shadow-sm"
+                          >
+                            <FileSpreadsheet className="w-4 h-4" />
+                            <span>Nhập danh sách bằng file Excel (.xlsx)</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={ExcelImportService.downloadHouseholdTemplate}
+                            className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold flex items-center space-x-1"
+                          >
+                            <Download className="w-3.5 h-3.5 text-slate-500" />
+                            <span>Tải file mẫu Excel</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ) : (
@@ -450,6 +649,15 @@ export const HouseholdManagement: React.FC<HouseholdManagementProps> = ({
                           >
                             <Edit className="w-4 h-4" />
                           </button>
+                          {isAdmin && (
+                            <button
+                              onClick={() => handleDeleteHousehold(h)}
+                              className="p-1.5 hover:bg-red-50 rounded-lg text-slate-400 hover:text-red-600 transition-colors"
+                              title="Xóa hộ chăn nuôi này"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -595,15 +803,33 @@ export const HouseholdManagement: React.FC<HouseholdManagementProps> = ({
 
               <div>
                 <label className="block font-bold text-slate-700 mb-1">NGHIÊN CỨU VIÊN PHỤ TRÁCH</label>
-                <select
-                  value={formData.assignedResearcher}
-                  onChange={(e) => setFormData({ ...formData, assignedResearcher: e.target.value })}
-                  className="w-full border border-slate-300 rounded-xl p-2.5 bg-white font-medium"
-                >
-                  <option value="ThS. Trần Thị Mai">ThS. Trần Thị Mai</option>
-                  <option value="KS. Lê Hoàng Long">KS. Lê Hoàng Long</option>
-                  <option value="TS. Nguyễn Văn Hùng">TS. Nguyễn Văn Hùng (Chủ nhiệm)</option>
-                </select>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <input
+                    type="text"
+                    value={formData.assignedResearcher}
+                    onChange={(e) => setFormData({ ...formData, assignedResearcher: e.target.value })}
+                    placeholder="Nhập họ tên cán bộ / nghiên cứu viên phụ trách..."
+                    className="flex-1 border border-slate-300 rounded-xl p-2.5 bg-white font-medium focus:ring-2 focus:ring-emerald-500"
+                  />
+                  {availableResearchers.length > 0 && (
+                    <select
+                      value=""
+                      onChange={(e) => {
+                        if (e.target.value) {
+                          setFormData({ ...formData, assignedResearcher: e.target.value });
+                        }
+                      }}
+                      className="border border-slate-300 rounded-xl p-2.5 bg-slate-50 text-xs font-semibold"
+                    >
+                      <option value="">-- Chọn từ danh sách --</option>
+                      {availableResearchers.map((r) => (
+                        <option key={r.id} value={r.fullName}>
+                          {r.fullName} ({r.role === 'ADMIN' ? 'Chủ nhiệm' : 'NCV'})
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
               </div>
 
               <div className="flex justify-end space-x-2 pt-3 border-t border-slate-200">
@@ -692,6 +918,17 @@ export const HouseholdManagement: React.FC<HouseholdManagementProps> = ({
           </div>
         </div>
       )}
+      {/* Modal Nhập dữ liệu Excel */}
+      <ExcelImportModal
+        isOpen={isExcelModalOpen}
+        initialTab="HOUSEHOLDS"
+        currentUser={currentUser}
+        onClose={() => setIsExcelModalOpen(false)}
+        onSuccess={() => {
+          setHouseholds(StorageService.getHouseholds());
+          if (onRefreshData) onRefreshData();
+        }}
+      />
     </div>
   );
 };

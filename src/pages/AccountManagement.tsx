@@ -12,10 +12,15 @@ import {
   X,
   Copy,
   Check,
+  FileSpreadsheet,
+  Download,
+  GraduationCap,
 } from 'lucide-react';
 import { AccountStatus, Role, StudyGroup, User } from '../types';
 import { StorageService } from '../services/storage';
 import { generateSalt, hashPassword } from '../utils/crypto';
+import { ExcelImportModal } from '../components/ExcelImportModal';
+import { ExcelImportService } from '../services/excelImportService';
 
 interface AccountManagementProps {
   currentUser: User;
@@ -30,6 +35,9 @@ export const AccountManagement: React.FC<AccountManagementProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [filterRole, setFilterRole] = useState<string>('ALL');
 
+  // Modal Excel
+  const [isExcelModalOpen, setIsExcelModalOpen] = useState(false);
+
   // Modal tạo tài khoản
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [newAccountData, setNewAccountData] = useState({
@@ -37,7 +45,9 @@ export const AccountManagement: React.FC<AccountManagementProps> = ({
     fullName: '',
     phone: '',
     email: '',
-    role: 'HOUSEHOLD' as Role,
+    title: '',
+    organization: '',
+    role: 'RESEARCHER' as Role,
     householdId: 'H01',
     password: '',
   });
@@ -76,7 +86,9 @@ export const AccountManagement: React.FC<AccountManagementProps> = ({
       fullName: '',
       phone: '',
       email: '',
-      role: 'HOUSEHOLD',
+      title: '',
+      organization: '',
+      role: 'RESEARCHER',
       householdId: 'H01',
       password: 'farm' + Math.floor(100 + Math.random() * 900),
     });
@@ -107,6 +119,8 @@ export const AccountManagement: React.FC<AccountManagementProps> = ({
       fullName: newAccountData.fullName.trim(),
       phone: newAccountData.phone.trim(),
       email: newAccountData.email.trim() || undefined,
+      title: newAccountData.title.trim() || undefined,
+      organization: newAccountData.organization.trim() || undefined,
       role: newAccountData.role,
       householdId: newAccountData.role === 'HOUSEHOLD' ? newAccountData.householdId : undefined,
       status: 'ACTIVE',
@@ -214,13 +228,31 @@ export const AccountManagement: React.FC<AccountManagementProps> = ({
           </p>
         </div>
 
-        <button
-          onClick={handleOpenAddModal}
-          className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold flex items-center space-x-2 transition-colors shadow-xs"
-        >
-          <UserPlus className="w-4 h-4" />
-          <span>TẠO TÀI KHOẢN MỚI</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => setIsExcelModalOpen(true)}
+            className="px-3.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-colors shadow-xs"
+            title="Nhập danh sách Người hướng dẫn & Nghiên cứu viên bằng tệp Excel (.xlsx)"
+          >
+            <FileSpreadsheet className="w-4 h-4 text-emerald-200" />
+            <span>Nhập cán bộ từ Excel</span>
+          </button>
+          <button
+            onClick={ExcelImportService.downloadResearchTeamTemplate}
+            className="px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-colors shadow-2xs"
+            title="Tải tệp mẫu Excel danh sách cán bộ nghiên cứu & người hướng dẫn"
+          >
+            <Download className="w-3.5 h-3.5 text-emerald-600" />
+            <span>Tải mẫu Excel</span>
+          </button>
+          <button
+            onClick={handleOpenAddModal}
+            className="px-4 py-2 bg-slate-900 hover:bg-black text-white rounded-xl text-xs font-bold flex items-center space-x-2 transition-colors shadow-xs"
+          >
+            <UserPlus className="w-4 h-4" />
+            <span>Tạo tài khoản mới</span>
+          </button>
+        </div>
       </div>
 
       {/* Handover Modal Card if newly created */}
@@ -298,6 +330,7 @@ export const AccountManagement: React.FC<AccountManagementProps> = ({
           >
             <option value="ALL">Tất cả ({users.length})</option>
             <option value="ADMIN">Quản trị viên (Admin)</option>
+            <option value="SUPERVISOR">Người hướng dẫn</option>
             <option value="RESEARCHER">Nghiên cứu viên</option>
             <option value="HOUSEHOLD">Hộ chăn nuôi</option>
           </select>
@@ -327,12 +360,17 @@ export const AccountManagement: React.FC<AccountManagementProps> = ({
                     <td className="py-3 px-3 font-mono font-bold text-slate-900">
                       {u.username}
                     </td>
-                    <td className="py-3 px-3 font-semibold text-slate-800">{u.fullName}</td>
+                    <td className="py-3 px-3">
+                      <div className="font-semibold text-slate-800">{u.fullName}</div>
+                      {u.title && <div className="text-[10px] text-slate-400">{u.title}</div>}
+                    </td>
                     <td className="py-3 px-3">
                       <span
                         className={`px-2 py-0.5 rounded-md font-bold text-[10px] ${
                           u.role === 'ADMIN'
                             ? 'bg-purple-100 text-purple-800'
+                            : u.role === 'SUPERVISOR'
+                            ? 'bg-amber-100 text-amber-800'
                             : u.role === 'RESEARCHER'
                             ? 'bg-blue-100 text-blue-800'
                             : 'bg-emerald-100 text-emerald-800'
@@ -340,6 +378,8 @@ export const AccountManagement: React.FC<AccountManagementProps> = ({
                       >
                         {u.role === 'ADMIN'
                           ? 'ADMIN'
+                          : u.role === 'SUPERVISOR'
+                          ? 'NGƯỜI HƯỚNG DẪN'
                           : u.role === 'RESEARCHER'
                           ? 'NGHIÊN CỨU VIÊN'
                           : 'HỘ DÂN'}
@@ -435,9 +475,10 @@ export const AccountManagement: React.FC<AccountManagementProps> = ({
                   }
                   className="w-full border border-slate-300 rounded-xl p-2.5 bg-white font-bold"
                 >
-                  <option value="HOUSEHOLD">Hộ chăn nuôi (Xem dữ liệu của chính mình)</option>
+                  <option value="SUPERVISOR">Người hướng dẫn / Cố vấn đề tài</option>
                   <option value="RESEARCHER">Nghiên cứu viên (Nhập liệu KAP, CWM thực địa)</option>
                   <option value="ADMIN">Quản trị viên (Toàn quyền)</option>
+                  <option value="HOUSEHOLD">Hộ chăn nuôi (Xem dữ liệu của chính mình)</option>
                 </select>
               </div>
 
@@ -462,7 +503,7 @@ export const AccountManagement: React.FC<AccountManagementProps> = ({
                   type="text"
                   value={newAccountData.username}
                   onChange={(e) => setNewAccountData({ ...newAccountData, username: e.target.value })}
-                  placeholder="h01 hoặc sđt hoặc email..."
+                  placeholder="huongdan_01, ncv_mai, hoặc mã hộ..."
                   className="w-full border border-slate-300 rounded-xl p-2.5 font-mono"
                 />
               </div>
@@ -473,10 +514,35 @@ export const AccountManagement: React.FC<AccountManagementProps> = ({
                   type="text"
                   value={newAccountData.fullName}
                   onChange={(e) => setNewAccountData({ ...newAccountData, fullName: e.target.value })}
-                  placeholder="Nguyễn Văn An"
+                  placeholder="PGS.TS. Nguyễn Văn Tuấn"
                   className="w-full border border-slate-300 rounded-xl p-2.5"
                 />
               </div>
+
+              {newAccountData.role !== 'HOUSEHOLD' && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">HỌC HÀM / HỌC VỊ</label>
+                    <input
+                      type="text"
+                      value={newAccountData.title}
+                      onChange={(e) => setNewAccountData({ ...newAccountData, title: e.target.value })}
+                      placeholder="PGS.TS, TS, ThS..."
+                      className="w-full border border-slate-300 rounded-xl p-2.5"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">ĐƠN VỊ CÔNG TÁC</label>
+                    <input
+                      type="text"
+                      value={newAccountData.organization}
+                      onChange={(e) => setNewAccountData({ ...newAccountData, organization: e.target.value })}
+                      placeholder="Đại học, Viện, Chi cục..."
+                      className="w-full border border-slate-300 rounded-xl p-2.5"
+                    />
+                  </div>
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -568,6 +634,17 @@ export const AccountManagement: React.FC<AccountManagementProps> = ({
           </div>
         </div>
       )}
+      {/* Modal Nhập Excel */}
+      <ExcelImportModal
+        isOpen={isExcelModalOpen}
+        initialTab="RESEARCH_TEAM"
+        currentUser={currentUser}
+        onClose={() => setIsExcelModalOpen(false)}
+        onSuccess={() => {
+          setUsers(StorageService.getUsers());
+          if (onRefreshData) onRefreshData();
+        }}
+      />
     </div>
   );
 };
