@@ -86,10 +86,13 @@ export class CloudService {
         // Phục hồi an toàn: Chỉ ghi đè nếu dữ liệu đám mây hợp lệ
         if (Array.isArray(d.users) && d.users.length > 0) {
           const localUsers = StorageService.getUsers();
-          // Hợp nhất người dùng theo ID và username để không làm mất tài khoản nào
+          // Hợp nhất người dùng theo username chuẩn hóa để không bị trùng lặp và lấy bản cập nhật mới nhất từ Cloud
           const userMap = new Map<string, any>();
-          localUsers.forEach(u => userMap.set(u.id, u));
-          d.users.forEach((u: any) => userMap.set(u.id, u));
+          localUsers.forEach(u => userMap.set(u.username.toLowerCase(), u));
+          d.users.forEach((u: any) => {
+            const key = (u.username || u.id).toLowerCase();
+            userMap.set(key, u);
+          });
           StorageService.saveUsersDirectly(Array.from(userMap.values()));
         }
 

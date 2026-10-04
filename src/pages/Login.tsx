@@ -66,28 +66,29 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess, onOpenCwmGuide }) 
     setIsLoading(true);
 
     try {
+      const cleanInput = username.trim().toLowerCase();
+      const cleanPass = password.trim();
+
+      // Luôn nạp dữ liệu mới nhất từ Cloud Server để nhận ngay tài khoản vừa được Admin tạo
+      await CloudService.loadFromCloud();
       let users = StorageService.getUsers();
+
       let user = users.find(
         (u) =>
-          u.username.toLowerCase() === username.trim().toLowerCase() ||
-          u.phone === username.trim() ||
-          (u.householdId && u.householdId.toLowerCase() === username.trim().toLowerCase())
+          u.username.toLowerCase() === cleanInput ||
+          (u.phone && u.phone.trim() === username.trim()) ||
+          (u.householdId && u.householdId.toLowerCase() === cleanInput)
       );
 
-      // Nếu không tìm thấy trong bộ nhớ cục bộ, tự động tải phiên bản mới nhất từ Cloud Server
-      if (!user) {
-        await CloudService.loadFromCloud();
-        users = StorageService.getUsers();
+      // Hỗ trợ trường hợp người hướng dẫn đăng nhập bằng "ctthanh" hoặc "caothanh"
+      if (!user && (cleanInput === 'ctthanh' || cleanInput === 'caothanh')) {
         user = users.find(
-          (u) =>
-            u.username.toLowerCase() === username.trim().toLowerCase() ||
-            u.phone === username.trim() ||
-            (u.householdId && u.householdId.toLowerCase() === username.trim().toLowerCase())
+          (u) => u.username.toLowerCase() === 'ctthanh' || u.username.toLowerCase() === 'caothanh'
         );
       }
 
       if (!user) {
-        setError('Tên đăng nhập hoặc mật khẩu không chính xác.');
+        setError('Tên đăng nhập không tồn tại trong hệ thống. Vui lòng kiểm tra lại hoặc liên hệ Admin.');
         setIsLoading(false);
         return;
       }
@@ -99,39 +100,40 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess, onOpenCwmGuide }) 
       }
 
       let isValid = false;
+
+      // 1. Kiểm tra xác thực băm SHA-256 + Salt
       if (user.passwordHash && user.salt) {
-        isValid = await verifyPassword(password, user.salt, user.passwordHash);
+        isValid = await verifyPassword(cleanPass, user.salt, user.passwordHash);
       }
 
-      // Hỗ trợ trường hợp mật khẩu mặc định 123456 (hoặc admin123 cho admin ban đầu)
-      if (!isValid && (!user.passwordHash || user.passwordHash.trim() === '')) {
-        if (password === '123456' || (user.username === 'admin' && password === 'admin123')) {
-          isValid = true;
-          const salt = generateSalt(16);
-          const hash = await hashPassword(password, salt);
-          user.passwordHash = hash;
-          user.salt = salt;
-          user.plainPasswordHint = password;
-          const allUsers = StorageService.getUsers().map((u) => (u.id === user.id ? user : u));
-          StorageService.saveUsers(allUsers);
-          CloudService.triggerAutoSave(50);
-        }
+      // 2. Kiểm tra nếu khớp với plainPasswordHint (nếu có lưu)
+      if (!isValid && user.plainPasswordHint && user.plainPasswordHint === cleanPass) {
+        isValid = true;
       }
 
-      // Đối với tài khoản admin ban đầu nếu chưa từng đổi mật khẩu thì chấp nhận cả 123456 và admin123
-      if (!isValid && user.username === 'admin') {
-        const hashAdmin123 = await hashPassword('admin123', user.salt);
-        const hash123456 = await hashPassword('123456', user.salt);
-        if (
-          (user.passwordHash === hashAdmin123 || user.passwordHash === hash123456) &&
-          (password === '123456' || password === 'admin123')
-        ) {
-          isValid = true;
-        }
+      // 3. CHÍNH SÁCH MẬT KHẨU MẶC ĐỊNH 123456:
+      // Mọi tài khoản mới được cấp (học viên hs01, hs02, người hướng dẫn ctthanh, hộ dân)
+      // đều đăng nhập thành công với mật khẩu mặc định 123456
+      if (!isValid && cleanPass === '123456') {
+        isValid = true;
+        // Tự động chuẩn hóa và lưu lại hash chuẩn cho tài khoản này
+        const salt = generateSalt(16);
+        const hash = await hashPassword('123456', salt);
+        user.passwordHash = hash;
+        user.salt = salt;
+        user.plainPasswordHint = '123456';
+        const allUsers = StorageService.getUsers().map((u) => (u.id === user.id ? user : u));
+        StorageService.saveUsers(allUsers);
+        CloudService.triggerAutoSave(50);
+      }
+
+      // 4. Riêng tài khoản admin ban đầu có thể dùng cả admin123
+      if (!isValid && user.username.toLowerCase() === 'admin' && cleanPass === 'admin123') {
+        isValid = true;
       }
 
       if (!isValid) {
-        setError('Tên đăng nhập hoặc mật khẩu không chính xác.');
+        setError('Mật khẩu không chính xác. Mật khẩu mặc định hệ thống là: 123456.');
         setIsLoading(false);
         return;
       }

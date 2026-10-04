@@ -1,0 +1,1219 @@
+{
+  "config": {
+    "appName": "Green Farm Research",
+    "researchTitle": "Tác động của ‘Cam kết xanh’ kết hợp ứng dụng quản lý chăn nuôi đến hành vi quản lý chất thải tại nguồn của các hộ chăn nuôi",
+    "totalHouseholds": 40,
+    "tnTarget": 20,
+    "dcTarget": 20,
+    "totalWeeks": 6,
+    "cwmMaxScore": 6,
+    "reminderDay": "Chủ nhật",
+    "reminderTime": "19:00",
+    "startDate": "2026-09-01",
+    "endDate": "2026-11-15",
+    "spreadsheetId": "",
+    "appsScriptUrl": "https://script.google.com/macros/s/AKfycby07SokU46mlK013-tGmlnu0GQFAg_zCpSuPE9l-Sb_geT340XMruiDPlAjVfCC0dQovg/exec",
+    "allowSelfRegistration": false,
+    "autoLockAfterDays": 7
+  },
+  "users": [
+    {
+      "id": "USR_ADMIN_01",
+      "username": "admin",
+      "fullName": "Quản trị viên (Chủ nhiệm đề tài)",
+      "email": "admin@research.vn",
+      "phone": "0912345678",
+      "role": "ADMIN",
+      "status": "ACTIVE",
+      "passwordHash": "83d9638b5bb220036931159f6f8513c51ee0308ecfe51606926755707eeaf636",
+      "salt": "SALT_ADMIN_999",
+      "plainPasswordHint": "123456",
+      "createdAt": "2026-10-04T10:42:10.863Z"
+    },
+    {
+      "id": "USR_1791110160092",
+      "username": "ctthanh",
+      "fullName": "Cao Thị Thanh",
+      "phone": "0988111222",
+      "title": "Người hướng dẫn",
+      "organization": "THPT",
+      "role": "SUPERVISOR",
+      "status": "ACTIVE",
+      "passwordHash": "ae3ac5c7459735984d63529ba0e1493b1d0800224f5bbba8e1eb19a64bc22603",
+      "salt": "SALT_CTTHANH_001",
+      "plainPasswordHint": "123456",
+      "createdAt": "2026-10-04T10:42:10.863Z"
+    },
+    {
+      "id": "USR_1791026884413",
+      "username": "caothanh",
+      "fullName": "Cao Thị Thanh",
+      "phone": "0988111222",
+      "title": "Người hướng dẫn",
+      "organization": "THPT",
+      "role": "SUPERVISOR",
+      "status": "ACTIVE",
+      "passwordHash": "fb9353dbe9d24d3e5af2183d76481ac01cacb6cd7a37c3e856ad57ecb43a6e9d",
+      "salt": "SALT_CAOTHANH_02",
+      "plainPasswordHint": "123456",
+      "createdAt": "2026-10-04T10:42:10.863Z"
+    },
+    {
+      "id": "USR_1791110218549",
+      "username": "hs01",
+      "fullName": "Học viên 01 (Nguyễn Văn A)",
+      "phone": "0977222333",
+      "title": "Học viên nghiên cứu",
+      "organization": "THPT",
+      "role": "RESEARCHER",
+      "status": "ACTIVE",
+      "passwordHash": "a589d6fdddd83d5999020e6f379fd603378d256bc88aad51e893eafa594c7bc3",
+      "salt": "SALT_HS01_0001",
+      "plainPasswordHint": "123456",
+      "createdAt": "2026-10-04T10:42:10.863Z"
+    },
+    {
+      "id": "USR_1791110229260",
+      "username": "hs02",
+      "fullName": "Học viên 02 (Trần Văn B)",
+      "phone": "0966333444",
+      "title": "Học viên nghiên cứu",
+      "organization": "THPT",
+      "role": "RESEARCHER",
+      "status": "ACTIVE",
+      "passwordHash": "c7739d19eddb9f9de49308fb1be571cf75b6ada053f2aa52d22257f3adae1690",
+      "salt": "SALT_HS02_0002",
+      "plainPasswordHint": "123456",
+      "createdAt": "2026-10-04T10:42:10.863Z"
+    }
+  ],
+  "households": [],
+  "bc01": [],
+  "bc02": [],
+  "bc03": [
+    {
+      "id": "BC03_H01",
+      "householdId": "H01",
+      "answers": [
+        {
+          "questionId": "YD01",
+          "score": 1
+        },
+        {
+          "questionId": "YD02",
+          "score": 1
+        },
+        {
+          "questionId": "YD03",
+          "score": 1
+        },
+        {
+          "questionId": "YD04",
+          "score": 1
+        },
+        {
+          "questionId": "YD05",
+          "score": 1
+        }
+      ],
+      "scoreYD": 1,
+      "isLocked": false,
+      "submittedAt": "2026-10-03T11:07:07.962Z",
+      "submittedBy": "Quản trị viên (Chủ nhiệm đề tài)",
+      "updatedAt": "2026-10-03T11:07:07.962Z",
+      "updatedBy": "admin"
+    }
+  ],
+  "bc04": [],
+  "bc05": [],
+  "bc06": [],
+  "bc07": [],
+  "auditLogs": [
+    {
+      "userId": "USR_ADMIN_01",
+      "username": "admin",
+      "userRole": "ADMIN",
+      "action": "CREATE",
+      "targetModule": "USERS",
+      "reason": "Tạo tài khoản mới hs02 (dsadsad, vai trò RESEARCHER).",
+      "id": "LOG_1791108863546_s98cu",
+      "timestamp": "2026-10-04T10:14:23.546Z"
+    },
+    {
+      "userId": "system",
+      "username": "system",
+      "userRole": "ADMIN",
+      "action": "SYNC",
+      "targetModule": "GOOGLE_SHEETS",
+      "reason": "Đồng bộ thành công 17 sheets lên Google Sheets qua Cloud Backend lúc 17:13:31",
+      "id": "LOG_1791108811466_33vzx",
+      "timestamp": "2026-10-04T10:13:31.466Z"
+    },
+    {
+      "userId": "USR_ADMIN_01",
+      "username": "admin",
+      "userRole": "ADMIN",
+      "action": "UPDATE",
+      "targetModule": "USERS_PASSWORD",
+      "reason": "Admin đặt lại mật khẩu mới an toàn cho tài khoản hs01.",
+      "id": "LOG_1791108802490_65j5g",
+      "timestamp": "2026-10-04T10:13:22.490Z"
+    },
+    {
+      "userId": "USR_ADMIN_01",
+      "username": "admin",
+      "userRole": "ADMIN",
+      "action": "UPDATE",
+      "targetModule": "AUTH",
+      "reason": "Đăng nhập thành công vào hệ thống lúc 17:13:09",
+      "id": "LOG_1791108789560_y76p2",
+      "timestamp": "2026-10-04T10:13:09.560Z"
+    },
+    {
+      "userId": "system",
+      "username": "system",
+      "userRole": "ADMIN",
+      "action": "SYNC",
+      "targetModule": "GOOGLE_SHEETS",
+      "reason": "Đồng bộ thành công 17 sheets lên Google Sheets lúc 16:59:34",
+      "id": "LOG_1791107974893_oqxzr",
+      "timestamp": "2026-10-04T09:59:34.894Z"
+    },
+    {
+      "userId": "system",
+      "username": "system",
+      "userRole": "ADMIN",
+      "action": "SYNC",
+      "targetModule": "GOOGLE_SHEETS",
+      "reason": "Đồng bộ thành công 17 sheets lên Google Sheets lúc 09:36:20",
+      "id": "LOG_1791081380508_4x6z8",
+      "timestamp": "2026-10-04T02:36:20.508Z"
+    },
+    {
+      "userId": "USR_1791026884413",
+      "username": "caothanh",
+      "userRole": "SUPERVISOR",
+      "action": "UPDATE",
+      "targetModule": "AUTH",
+      "reason": "Đăng nhập thành công vào hệ thống lúc 06:50:24",
+      "id": "LOG_1791071424673_n1y5s",
+      "timestamp": "2026-10-03T23:50:24.673Z"
+    },
+    {
+      "userId": "USR_1791026884413",
+      "username": "caothanh",
+      "userRole": "SUPERVISOR",
+      "action": "UPDATE",
+      "targetModule": "AUTH",
+      "reason": "Đăng nhập thành công vào hệ thống lúc 06:35:54",
+      "id": "LOG_1791070554171_sa0zb",
+      "timestamp": "2026-10-03T23:35:54.171Z"
+    },
+    {
+      "userId": "USR_1791026884413",
+      "username": "caothanh",
+      "userRole": "SUPERVISOR",
+      "action": "UPDATE",
+      "targetModule": "AUTH",
+      "reason": "Đăng nhập thành công vào hệ thống lúc 06:32:52",
+      "id": "LOG_1791070372003_trsbh",
+      "timestamp": "2026-10-03T23:32:52.003Z"
+    },
+    {
+      "userId": "system",
+      "username": "system",
+      "userRole": "ADMIN",
+      "action": "SYNC",
+      "targetModule": "GOOGLE_SHEETS",
+      "reason": "Đồng bộ thành công 17 sheets lên Google Sheets qua Cloud Backend lúc 06:27:42",
+      "id": "LOG_1791070062201_l9d58",
+      "timestamp": "2026-10-03T23:27:42.201Z"
+    },
+    {
+      "userId": "system",
+      "username": "system",
+      "userRole": "ADMIN",
+      "action": "SYNC",
+      "targetModule": "GOOGLE_SHEETS",
+      "reason": "Đồng bộ thành công 17 sheets lên Google Sheets qua Cloud Backend lúc 18:33:22",
+      "id": "LOG_1791027202936_w42ft",
+      "timestamp": "2026-10-03T11:33:22.936Z"
+    },
+    {
+      "userId": "USR_ADMIN_01",
+      "username": "admin",
+      "userRole": "ADMIN",
+      "action": "UPDATE",
+      "targetModule": "USERS_PASSWORD",
+      "reason": "Admin đặt lại mật khẩu mới an toàn cho tài khoản hs01.",
+      "id": "LOG_1791027194343_dwien",
+      "timestamp": "2026-10-03T11:33:14.343Z"
+    },
+    {
+      "userId": "system",
+      "username": "system",
+      "userRole": "ADMIN",
+      "action": "SYNC",
+      "targetModule": "GOOGLE_SHEETS",
+      "reason": "Đồng bộ thành công 17 sheets lên Google Sheets qua Cloud Backend lúc 18:32:24",
+      "id": "LOG_1791027144399_ks3ga",
+      "timestamp": "2026-10-03T11:32:24.399Z"
+    },
+    {
+      "userId": "USR_ADMIN_01",
+      "username": "admin",
+      "userRole": "ADMIN",
+      "action": "UPDATE",
+      "targetModule": "USERS_PASSWORD",
+      "reason": "Admin đặt lại mật khẩu mới an toàn cho tài khoản caothanh.",
+      "id": "LOG_1791027134863_4nm4h",
+      "timestamp": "2026-10-03T11:32:14.863Z"
+    },
+    {
+      "userId": "system",
+      "username": "system",
+      "userRole": "ADMIN",
+      "action": "SYNC",
+      "targetModule": "GOOGLE_SHEETS",
+      "reason": "Đồng bộ thành công 17 sheets lên Google Sheets qua Cloud Backend lúc 18:28:54",
+      "id": "LOG_1791026934067_z4o5n",
+      "timestamp": "2026-10-03T11:28:54.067Z"
+    },
+    {
+      "userId": "USR_ADMIN_01",
+      "username": "admin",
+      "userRole": "ADMIN",
+      "action": "CREATE",
+      "targetModule": "USERS",
+      "reason": "Tạo tài khoản mới hs01 (Nguyễn văn A, vai trò RESEARCHER).",
+      "id": "LOG_1791026925247_tkqfa",
+      "timestamp": "2026-10-03T11:28:45.247Z"
+    },
+    {
+      "userId": "system",
+      "username": "system",
+      "userRole": "ADMIN",
+      "action": "SYNC",
+      "targetModule": "GOOGLE_SHEETS",
+      "reason": "Đồng bộ thành công 17 sheets lên Google Sheets qua Cloud Backend lúc 18:28:13",
+      "id": "LOG_1791026893465_tsbgx",
+      "timestamp": "2026-10-03T11:28:13.465Z"
+    },
+    {
+      "userId": "USR_ADMIN_01",
+      "username": "admin",
+      "userRole": "ADMIN",
+      "action": "CREATE",
+      "targetModule": "USERS",
+      "reason": "Tạo tài khoản mới caothanh (Cao Thị Thanh, vai trò SUPERVISOR).",
+      "id": "LOG_1791026884414_rmn6n",
+      "timestamp": "2026-10-03T11:28:04.414Z"
+    },
+    {
+      "userId": "USR_ADMIN_01",
+      "username": "admin",
+      "userRole": "ADMIN",
+      "action": "UPDATE",
+      "targetModule": "AUTH",
+      "reason": "Đăng nhập thành công vào hệ thống lúc 18:27:24",
+      "id": "LOG_1791026844007_uohgx",
+      "timestamp": "2026-10-03T11:27:24.007Z"
+    },
+    {
+      "userId": "system",
+      "username": "system",
+      "userRole": "ADMIN",
+      "action": "SYNC",
+      "targetModule": "GOOGLE_SHEETS",
+      "reason": "Đồng bộ thành công 17 sheets lên Google Sheets lúc 18:07:16",
+      "id": "LOG_1791025636296_3yhck",
+      "timestamp": "2026-10-03T11:07:16.296Z"
+    },
+    {
+      "userId": "USR_ADMIN_01",
+      "username": "admin",
+      "userRole": "ADMIN",
+      "action": "CREATE",
+      "targetModule": "BC03_YDINH",
+      "householdId": "H01",
+      "reason": "Cập nhật khảo sát Ý định thay đổi YĐ trước: 1/5.0.",
+      "id": "LOG_1791025627962_oenrg",
+      "timestamp": "2026-10-03T11:07:07.962Z"
+    },
+    {
+      "userId": "USR_ADMIN_01",
+      "username": "admin",
+      "userRole": "ADMIN",
+      "action": "UPDATE",
+      "targetModule": "AUTH",
+      "reason": "Đăng nhập thành công vào hệ thống lúc 17:40:02",
+      "id": "LOG_1791024002502_venh5",
+      "timestamp": "2026-10-03T10:40:02.502Z"
+    },
+    {
+      "userId": "USR_ADMIN_01",
+      "username": "admin",
+      "userRole": "ADMIN",
+      "action": "UPDATE",
+      "targetModule": "AUTH",
+      "reason": "Đăng nhập thành công vào hệ thống lúc 17:39:25",
+      "id": "LOG_1791023965516_uwxy1",
+      "timestamp": "2026-10-03T10:39:25.516Z"
+    },
+    {
+      "userId": "USR_ADMIN_01",
+      "username": "admin",
+      "userRole": "ADMIN",
+      "action": "UPDATE",
+      "targetModule": "CONFIG",
+      "reason": "Cập nhật tham số cấu hình hệ thống nghiên cứu.",
+      "id": "LOG_1791023872942_au8h5",
+      "timestamp": "2026-10-03T10:37:52.942Z"
+    },
+    {
+      "id": "LOG_INIT_CLEAN",
+      "timestamp": "2026-10-03T10:27:09.076Z",
+      "userId": "USR_ADMIN_01",
+      "username": "admin",
+      "userRole": "ADMIN",
+      "action": "RESET",
+      "targetModule": "SYSTEM",
+      "reason": "Hệ thống đã xóa toàn bộ dữ liệu nền mẫu (hộ kinh doanh, người nghiên cứu, khảo sát cũ). Sẵn sàng tiếp nhận dữ liệu thực tế."
+    }
+  ],
+  "createdAt": "2026-10-04T10:00:04.675Z",
+  "updatedAt": "2026-10-04T10:42:10.863Z",
+  "forwardToGoogleSheets": true,
+  "appsScriptUrl": "https://script.google.com/macros/s/AKfycby07SokU46mlK013-tGmlnu0GQFAg_zCpSuPE9l-Sb_geT340XMruiDPlAjVfCC0dQovg/exec",
+  "spreadsheetId": "",
+  "sheets": {
+    "CONFIG": [
+      [
+        "KEY",
+        "VALUE",
+        "DESCRIPTION",
+        "UPDATED_AT"
+      ],
+      [
+        "APP_NAME",
+        "Green Farm Research",
+        "Tên ứng dụng",
+        "2026-10-04T10:14:23.599Z"
+      ],
+      [
+        "RESEARCH_TITLE",
+        "Tác động của ‘Cam kết xanh’ kết hợp ứng dụng quản lý chăn nuôi đến hành vi quản lý chất thải tại nguồn của các hộ chăn nuôi",
+        "Tên đề tài nghiên cứu",
+        "2026-10-04T10:14:23.599Z"
+      ],
+      [
+        "TOTAL_HOUSEHOLDS",
+        40,
+        "Tổng số hộ tham gia",
+        "2026-10-04T10:14:23.599Z"
+      ],
+      [
+        "TN_TARGET",
+        20,
+        "Số hộ nhóm can thiệp (TN)",
+        "2026-10-04T10:14:23.599Z"
+      ],
+      [
+        "DC_TARGET",
+        20,
+        "Số hộ nhóm đối chứng (ĐC)",
+        "2026-10-04T10:14:23.599Z"
+      ],
+      [
+        "TOTAL_WEEKS",
+        6,
+        "Số tuần can thiệp (W1-W6)",
+        "2026-10-04T10:14:23.599Z"
+      ],
+      [
+        "CWM_MAX_SCORE",
+        6,
+        "Điểm tối đa thang CWM",
+        "2026-10-04T10:14:23.599Z"
+      ],
+      [
+        "REMINDER_DAY",
+        "Chủ nhật",
+        "Ngày gửi nhắc nhở tuần",
+        "2026-10-04T10:14:23.599Z"
+      ],
+      [
+        "REMINDER_TIME",
+        "19:00",
+        "Giờ gửi nhắc nhở",
+        "2026-10-04T10:14:23.599Z"
+      ],
+      [
+        "START_DATE",
+        "2026-09-01",
+        "Ngày bắt đầu nghiên cứu",
+        "2026-10-04T10:14:23.599Z"
+      ],
+      [
+        "END_DATE",
+        "2026-11-15",
+        "Ngày kết thúc nghiên cứu",
+        "2026-10-04T10:14:23.599Z"
+      ],
+      [
+        "SPREADSHEET_ID",
+        "",
+        "ID Google Spreadsheet liên kết",
+        "2026-10-04T10:14:23.599Z"
+      ],
+      [
+        "APPS_SCRIPT_URL",
+        "https://script.google.com/macros/s/AKfycby07SokU46mlK013-tGmlnu0GQFAg_zCpSuPE9l-Sb_geT340XMruiDPlAjVfCC0dQovg/exec",
+        "URL Web App tiếp nhận dữ liệu",
+        "2026-10-04T10:14:23.599Z"
+      ]
+    ],
+    "USERS": [
+      [
+        "USER_ID",
+        "USERNAME",
+        "FULL_NAME",
+        "PHONE",
+        "ROLE",
+        "HOUSEHOLD_ID",
+        "STATUS",
+        "TITLE",
+        "ORGANIZATION",
+        "PASSWORD_HASH",
+        "SALT",
+        "CREATED_AT"
+      ],
+      [
+        "USR_ADMIN_01",
+        "admin",
+        "Quản trị viên (Chủ nhiệm đề tài)",
+        "",
+        "ADMIN",
+        "",
+        "ACTIVE",
+        "",
+        "",
+        "5bbc79b65b8aa8c702bae4420c9d6c527929d31b0edace7df7af47af6cc6cf74",
+        "SALT_ADMIN_999",
+        "2026-10-04T10:00:04.674Z"
+      ],
+      [
+        "USR_1791026884413",
+        "caothanh",
+        "Cao Thị Thanh",
+        "",
+        "SUPERVISOR",
+        "",
+        "ACTIVE",
+        "CN",
+        "THPT",
+        "c48681ccfca80686751e3db29a1a1d80b37325f2331ea046b13aad7829a5e31a",
+        "utQtA*iGU&@w6gLn",
+        "2026-10-03T11:28:04.413Z"
+      ],
+      [
+        "USR_1791026925247",
+        "hs01",
+        "Nguyễn văn A",
+        "",
+        "RESEARCHER",
+        "",
+        "ACTIVE",
+        "HS",
+        "THPT",
+        "0deef95e49225b6326beee0fb91cd61aa900ac8c1a7d5200cf5d758cc6f2f96d",
+        "GeZlpC^aOYT@aSCI",
+        "2026-10-03T11:28:45.247Z"
+      ],
+      [
+        "USR_1791108863545",
+        "hs02",
+        "dsadsad",
+        "",
+        "RESEARCHER",
+        "",
+        "ACTIVE",
+        "dsadsa",
+        "dsads",
+        "f00d3532f2b8e720f32817937aeaf01b4476a4ba81329aa4d0b782de0700a496",
+        "QyOIL6dJaod8@Thi",
+        "2026-10-04T10:14:23.545Z"
+      ]
+    ],
+    "HOUSEHOLDS": [
+      [
+        "HOUSEHOLD_ID",
+        "REPRESENTATIVE_NAME",
+        "PHONE",
+        "ADDRESS",
+        "LIVESTOCK_TYPE",
+        "HERD_SIZE",
+        "FARMING_YEARS",
+        "FARMING_TYPE",
+        "CURRENT_WASTE_METHOD",
+        "GROUP",
+        "STATUS",
+        "JOINED_DATE",
+        "RESEARCHER",
+        "NOTES",
+        "UPDATED_AT"
+      ]
+    ],
+    "BC01_HO_THONG_TIN": [
+      [
+        "RECORD_ID",
+        "HOUSEHOLD_ID",
+        "NAME",
+        "PHONE",
+        "ADDRESS",
+        "LIVESTOCK",
+        "HERD_SIZE",
+        "FARMING_YEARS",
+        "FARMING_TYPE",
+        "WASTE_METHOD",
+        "IS_LOCKED",
+        "CREATED_BY",
+        "CREATED_AT",
+        "UPDATED_AT",
+        "UPDATED_BY"
+      ]
+    ],
+    "BC02_KAP_PRE": [
+      [
+        "RECORD_ID",
+        "HOUSEHOLD_ID",
+        "SCORE_K_PRE",
+        "SCORE_T_PRE",
+        "SCORE_HT_PRE",
+        "B1_THU_GOM",
+        "B2_PHAN_LOAI",
+        "B3_LUU_CHUA",
+        "B4_KHONG_XA",
+        "B5_XU_LY",
+        "B6_VE_SINH",
+        "IS_LOCKED",
+        "SUBMITTED_BY",
+        "SUBMITTED_AT"
+      ]
+    ],
+    "BC03_YDINH": [
+      [
+        "RECORD_ID",
+        "HOUSEHOLD_ID",
+        "SCORE_YD_PRE",
+        "YD01_Y_DINH",
+        "YD02_SAN_SANG",
+        "YD03_NIEM_TIN",
+        "YD04_TRACH_NHIEM",
+        "YD05_DUY_TRI",
+        "IS_LOCKED",
+        "SUBMITTED_BY",
+        "SUBMITTED_AT"
+      ],
+      [
+        "BC03_H01",
+        "H01",
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        "KHÔNG",
+        "Quản trị viên (Chủ nhiệm đề tài)",
+        "2026-10-03T11:07:07.962Z"
+      ]
+    ],
+    "BC04_CWM_PRE": [
+      [
+        "RECORD_ID",
+        "HOUSEHOLD_ID",
+        "SCORE_CWM_PRE",
+        "B1_THU_GOM",
+        "B2_PHAN_LOAI",
+        "B3_LUU_CHUA",
+        "B4_KHONG_XA",
+        "B5_XU_LY",
+        "B6_VE_SINH",
+        "NOTES",
+        "EVIDENCE",
+        "FAILURE_REASONS",
+        "OBSERVED_BY",
+        "OBSERVED_AT",
+        "IS_LOCKED"
+      ]
+    ],
+    "BC04_CWM_POST": [
+      [
+        "RECORD_ID",
+        "HOUSEHOLD_ID",
+        "SCORE_CWM_POST",
+        "B1_THU_GOM",
+        "B2_PHAN_LOAI",
+        "B3_LUU_CHUA",
+        "B4_KHONG_XA",
+        "B5_XU_LY",
+        "B6_VE_SINH",
+        "NOTES",
+        "EVIDENCE",
+        "FAILURE_REASONS",
+        "OBSERVED_BY",
+        "OBSERVED_AT",
+        "IS_LOCKED"
+      ]
+    ],
+    "BC05_CAM_KET": [
+      [
+        "RECORD_ID",
+        "HOUSEHOLD_ID",
+        "B1_THU_GOM",
+        "B2_PHAN_LOAI",
+        "B3_LUU_CHUA",
+        "B4_KHONG_XA",
+        "B5_XU_LY",
+        "B6_VE_SINH",
+        "B7_BAO_CAO_TUAN",
+        "CONFIRMED",
+        "CONFIRMED_BY",
+        "CONFIRMED_AT",
+        "VERSION"
+      ]
+    ],
+    "BC06_WEEKLY": [
+      [
+        "RECORD_ID",
+        "HOUSEHOLD_ID",
+        "WEEK",
+        "WEEKLY_SCORE",
+        "B1",
+        "B2",
+        "B3",
+        "B4",
+        "B5",
+        "B6",
+        "BARRIERS",
+        "OTHER_BARRIERS",
+        "SUBMITTED_BY",
+        "SUBMITTED_AT"
+      ]
+    ],
+    "BC07_POST": [
+      [
+        "RECORD_ID",
+        "HOUSEHOLD_ID",
+        "SCORE_HT_POST",
+        "B1_THU_GOM",
+        "B2_PHAN_LOAI",
+        "B3_LUU_CHUA",
+        "B4_KHONG_XA",
+        "B5_XU_LY",
+        "B6_VE_SINH",
+        "MAINTENANCE_WILLINGNESS",
+        "FEEDBACK",
+        "REMAINING_BARRIERS",
+        "IS_LOCKED",
+        "SUBMITTED_BY",
+        "SUBMITTED_AT"
+      ]
+    ],
+    "BC08_TONG_HOP": [
+      [
+        "HOUSEHOLD_ID",
+        "REPRESENTATIVE_NAME",
+        "GROUP",
+        "K_PRE",
+        "T_PRE",
+        "YD_PRE",
+        "HT_PRE",
+        "CWM_PRE",
+        "HT_POST",
+        "CWM_POST",
+        "DELTA_CWM",
+        "W1",
+        "W2",
+        "W3",
+        "W4",
+        "W5",
+        "W6",
+        "STATUS"
+      ]
+    ],
+    "CWM_DETAIL": [
+      [
+        "HOUSEHOLD_ID",
+        "GROUP",
+        "STAGE",
+        "CRITERIA_CODE",
+        "IS_PASSED",
+        "EVIDENCE",
+        "OBSERVED_AT"
+      ]
+    ],
+    "BARRIERS": [
+      [
+        "RECORD_ID",
+        "HOUSEHOLD_ID",
+        "STAGE_OR_WEEK",
+        "BARRIER_TEXT",
+        "RECORDED_AT"
+      ]
+    ],
+    "AUDIT_LOG": [
+      [
+        "LOG_ID",
+        "TIMESTAMP",
+        "USER_ID",
+        "USERNAME",
+        "ROLE",
+        "ACTION",
+        "TARGET_MODULE",
+        "HOUSEHOLD_ID",
+        "OLD_VALUE",
+        "NEW_VALUE",
+        "REASON"
+      ],
+      [
+        "LOG_1791108863546_s98cu",
+        "2026-10-04T10:14:23.546Z",
+        "USR_ADMIN_01",
+        "admin",
+        "ADMIN",
+        "CREATE",
+        "USERS",
+        "",
+        "",
+        "",
+        "Tạo tài khoản mới hs02 (dsadsad, vai trò RESEARCHER)."
+      ],
+      [
+        "LOG_1791108811466_33vzx",
+        "2026-10-04T10:13:31.466Z",
+        "system",
+        "system",
+        "ADMIN",
+        "SYNC",
+        "GOOGLE_SHEETS",
+        "",
+        "",
+        "",
+        "Đồng bộ thành công 17 sheets lên Google Sheets qua Cloud Backend lúc 17:13:31"
+      ],
+      [
+        "LOG_1791108802490_65j5g",
+        "2026-10-04T10:13:22.490Z",
+        "USR_ADMIN_01",
+        "admin",
+        "ADMIN",
+        "UPDATE",
+        "USERS_PASSWORD",
+        "",
+        "",
+        "",
+        "Admin đặt lại mật khẩu mới an toàn cho tài khoản hs01."
+      ],
+      [
+        "LOG_1791108789560_y76p2",
+        "2026-10-04T10:13:09.560Z",
+        "USR_ADMIN_01",
+        "admin",
+        "ADMIN",
+        "UPDATE",
+        "AUTH",
+        "",
+        "",
+        "",
+        "Đăng nhập thành công vào hệ thống lúc 17:13:09"
+      ],
+      [
+        "LOG_1791107974893_oqxzr",
+        "2026-10-04T09:59:34.894Z",
+        "system",
+        "system",
+        "ADMIN",
+        "SYNC",
+        "GOOGLE_SHEETS",
+        "",
+        "",
+        "",
+        "Đồng bộ thành công 17 sheets lên Google Sheets lúc 16:59:34"
+      ],
+      [
+        "LOG_1791081380508_4x6z8",
+        "2026-10-04T02:36:20.508Z",
+        "system",
+        "system",
+        "ADMIN",
+        "SYNC",
+        "GOOGLE_SHEETS",
+        "",
+        "",
+        "",
+        "Đồng bộ thành công 17 sheets lên Google Sheets lúc 09:36:20"
+      ],
+      [
+        "LOG_1791071424673_n1y5s",
+        "2026-10-03T23:50:24.673Z",
+        "USR_1791026884413",
+        "caothanh",
+        "SUPERVISOR",
+        "UPDATE",
+        "AUTH",
+        "",
+        "",
+        "",
+        "Đăng nhập thành công vào hệ thống lúc 06:50:24"
+      ],
+      [
+        "LOG_1791070554171_sa0zb",
+        "2026-10-03T23:35:54.171Z",
+        "USR_1791026884413",
+        "caothanh",
+        "SUPERVISOR",
+        "UPDATE",
+        "AUTH",
+        "",
+        "",
+        "",
+        "Đăng nhập thành công vào hệ thống lúc 06:35:54"
+      ],
+      [
+        "LOG_1791070372003_trsbh",
+        "2026-10-03T23:32:52.003Z",
+        "USR_1791026884413",
+        "caothanh",
+        "SUPERVISOR",
+        "UPDATE",
+        "AUTH",
+        "",
+        "",
+        "",
+        "Đăng nhập thành công vào hệ thống lúc 06:32:52"
+      ],
+      [
+        "LOG_1791070062201_l9d58",
+        "2026-10-03T23:27:42.201Z",
+        "system",
+        "system",
+        "ADMIN",
+        "SYNC",
+        "GOOGLE_SHEETS",
+        "",
+        "",
+        "",
+        "Đồng bộ thành công 17 sheets lên Google Sheets qua Cloud Backend lúc 06:27:42"
+      ],
+      [
+        "LOG_1791027202936_w42ft",
+        "2026-10-03T11:33:22.936Z",
+        "system",
+        "system",
+        "ADMIN",
+        "SYNC",
+        "GOOGLE_SHEETS",
+        "",
+        "",
+        "",
+        "Đồng bộ thành công 17 sheets lên Google Sheets qua Cloud Backend lúc 18:33:22"
+      ],
+      [
+        "LOG_1791027194343_dwien",
+        "2026-10-03T11:33:14.343Z",
+        "USR_ADMIN_01",
+        "admin",
+        "ADMIN",
+        "UPDATE",
+        "USERS_PASSWORD",
+        "",
+        "",
+        "",
+        "Admin đặt lại mật khẩu mới an toàn cho tài khoản hs01."
+      ],
+      [
+        "LOG_1791027144399_ks3ga",
+        "2026-10-03T11:32:24.399Z",
+        "system",
+        "system",
+        "ADMIN",
+        "SYNC",
+        "GOOGLE_SHEETS",
+        "",
+        "",
+        "",
+        "Đồng bộ thành công 17 sheets lên Google Sheets qua Cloud Backend lúc 18:32:24"
+      ],
+      [
+        "LOG_1791027134863_4nm4h",
+        "2026-10-03T11:32:14.863Z",
+        "USR_ADMIN_01",
+        "admin",
+        "ADMIN",
+        "UPDATE",
+        "USERS_PASSWORD",
+        "",
+        "",
+        "",
+        "Admin đặt lại mật khẩu mới an toàn cho tài khoản caothanh."
+      ],
+      [
+        "LOG_1791026934067_z4o5n",
+        "2026-10-03T11:28:54.067Z",
+        "system",
+        "system",
+        "ADMIN",
+        "SYNC",
+        "GOOGLE_SHEETS",
+        "",
+        "",
+        "",
+        "Đồng bộ thành công 17 sheets lên Google Sheets qua Cloud Backend lúc 18:28:54"
+      ],
+      [
+        "LOG_1791026925247_tkqfa",
+        "2026-10-03T11:28:45.247Z",
+        "USR_ADMIN_01",
+        "admin",
+        "ADMIN",
+        "CREATE",
+        "USERS",
+        "",
+        "",
+        "",
+        "Tạo tài khoản mới hs01 (Nguyễn văn A, vai trò RESEARCHER)."
+      ],
+      [
+        "LOG_1791026893465_tsbgx",
+        "2026-10-03T11:28:13.465Z",
+        "system",
+        "system",
+        "ADMIN",
+        "SYNC",
+        "GOOGLE_SHEETS",
+        "",
+        "",
+        "",
+        "Đồng bộ thành công 17 sheets lên Google Sheets qua Cloud Backend lúc 18:28:13"
+      ],
+      [
+        "LOG_1791026884414_rmn6n",
+        "2026-10-03T11:28:04.414Z",
+        "USR_ADMIN_01",
+        "admin",
+        "ADMIN",
+        "CREATE",
+        "USERS",
+        "",
+        "",
+        "",
+        "Tạo tài khoản mới caothanh (Cao Thị Thanh, vai trò SUPERVISOR)."
+      ],
+      [
+        "LOG_1791026844007_uohgx",
+        "2026-10-03T11:27:24.007Z",
+        "USR_ADMIN_01",
+        "admin",
+        "ADMIN",
+        "UPDATE",
+        "AUTH",
+        "",
+        "",
+        "",
+        "Đăng nhập thành công vào hệ thống lúc 18:27:24"
+      ],
+      [
+        "LOG_1791025636296_3yhck",
+        "2026-10-03T11:07:16.296Z",
+        "system",
+        "system",
+        "ADMIN",
+        "SYNC",
+        "GOOGLE_SHEETS",
+        "",
+        "",
+        "",
+        "Đồng bộ thành công 17 sheets lên Google Sheets lúc 18:07:16"
+      ],
+      [
+        "LOG_1791025627962_oenrg",
+        "2026-10-03T11:07:07.962Z",
+        "USR_ADMIN_01",
+        "admin",
+        "ADMIN",
+        "CREATE",
+        "BC03_YDINH",
+        "H01",
+        "",
+        "",
+        "Cập nhật khảo sát Ý định thay đổi YĐ trước: 1/5.0."
+      ],
+      [
+        "LOG_1791024002502_venh5",
+        "2026-10-03T10:40:02.502Z",
+        "USR_ADMIN_01",
+        "admin",
+        "ADMIN",
+        "UPDATE",
+        "AUTH",
+        "",
+        "",
+        "",
+        "Đăng nhập thành công vào hệ thống lúc 17:40:02"
+      ],
+      [
+        "LOG_1791023965516_uwxy1",
+        "2026-10-03T10:39:25.516Z",
+        "USR_ADMIN_01",
+        "admin",
+        "ADMIN",
+        "UPDATE",
+        "AUTH",
+        "",
+        "",
+        "",
+        "Đăng nhập thành công vào hệ thống lúc 17:39:25"
+      ],
+      [
+        "LOG_1791023872942_au8h5",
+        "2026-10-03T10:37:52.942Z",
+        "USR_ADMIN_01",
+        "admin",
+        "ADMIN",
+        "UPDATE",
+        "CONFIG",
+        "",
+        "",
+        "",
+        "Cập nhật tham số cấu hình hệ thống nghiên cứu."
+      ],
+      [
+        "LOG_INIT_CLEAN",
+        "2026-10-03T10:27:09.076Z",
+        "USR_ADMIN_01",
+        "admin",
+        "ADMIN",
+        "RESET",
+        "SYSTEM",
+        "",
+        "",
+        "",
+        "Hệ thống đã xóa toàn bộ dữ liệu nền mẫu (hộ kinh doanh, người nghiên cứu, khảo sát cũ). Sẵn sàng tiếp nhận dữ liệu thực tế."
+      ]
+    ],
+    "NOTIFICATIONS": [
+      [
+        "NOTIFICATION_ID",
+        "TITLE",
+        "MESSAGE",
+        "TYPE",
+        "TARGET_ROLE",
+        "TARGET_HOUSEHOLD",
+        "CREATED_AT"
+      ],
+      [
+        "NOTIF_01",
+        "Chào mừng nghiên cứu",
+        "Hệ thống Quản lý Nghiên cứu Cam kết Xanh đã sẵn sàng hoạt động.",
+        "SUCCESS",
+        "ADMIN",
+        "",
+        "2026-10-04T10:14:23.599Z"
+      ]
+    ],
+    "DASHBOARD_DATA": [
+      [
+        "METRIC_NAME",
+        "VALUE",
+        "UNIT",
+        "LAST_CALCULATED_AT"
+      ],
+      [
+        "TOTAL_HOUSEHOLDS",
+        0,
+        "hộ",
+        "2026-10-04T10:14:23.599Z"
+      ],
+      [
+        "TN_COUNT",
+        0,
+        "hộ",
+        "2026-10-04T10:14:23.599Z"
+      ],
+      [
+        "DC_COUNT",
+        0,
+        "hộ",
+        "2026-10-04T10:14:23.599Z"
+      ],
+      [
+        "PRE_CWM_OBSERVED",
+        0,
+        "hộ",
+        "2026-10-04T10:14:23.599Z"
+      ],
+      [
+        "POST_CWM_OBSERVED",
+        0,
+        "hộ",
+        "2026-10-04T10:14:23.599Z"
+      ],
+      [
+        "GREEN_COMMITMENT_CONFIRMED",
+        0,
+        "hộ",
+        "2026-10-04T10:14:23.599Z"
+      ],
+      [
+        "MEAN_CWM_PRE_TN",
+        "0",
+        "điểm (thang 0-6)",
+        "2026-10-04T10:14:23.599Z"
+      ],
+      [
+        "MEAN_CWM_POST_TN",
+        "0",
+        "điểm (thang 0-6)",
+        "2026-10-04T10:14:23.599Z"
+      ],
+      [
+        "MEAN_CWM_PRE_DC",
+        "0",
+        "điểm (thang 0-6)",
+        "2026-10-04T10:14:23.599Z"
+      ],
+      [
+        "MEAN_CWM_POST_DC",
+        "0",
+        "điểm (thang 0-6)",
+        "2026-10-04T10:14:23.599Z"
+      ],
+      [
+        "DELTA_CWM_TN",
+        "0.00",
+        "điểm",
+        "2026-10-04T10:14:23.599Z"
+      ],
+      [
+        "DELTA_CWM_DC",
+        "0.00",
+        "điểm",
+        "2026-10-04T10:14:23.599Z"
+      ],
+      [
+        "DIFFERENCE_MEAN_DELTA",
+        "0.00",
+        "điểm",
+        "2026-10-04T10:14:23.599Z"
+      ],
+      [
+        "COMPLETION_RATE",
+        0,
+        "%",
+        "2026-10-04T10:14:23.599Z"
+      ]
+    ]
+  }
+}
