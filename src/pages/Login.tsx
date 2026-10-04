@@ -114,6 +114,11 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess, onOpenCwmGuide }) 
   const [guideTab, setGuideTab] = useState<GuideTabKey>('OVERVIEW');
   const [outsideActiveTab, setOutsideActiveTab] = useState<GuideTabKey>('OVERVIEW');
 
+  // Tự động đồng bộ các tài khoản từ Google Sheets ngay khi mở trang đăng nhập
+  React.useEffect(() => {
+    GoogleSheetsService.pullFromGoogleSheets().catch(() => {});
+  }, []);
+
   const openGuideWithTab = (tab: GuideTabKey) => {
     setGuideTab(tab);
     setOutsideActiveTab(tab);

@@ -43,10 +43,17 @@ export default function App() {
       // 1. Phục hồi dữ liệu từ Cloud Server (nếu có)
       await CloudService.loadFromCloud();
 
-      // 2. Đảm bảo tài khoản quản trị tồn tại
+      // 2. Tự động đồng bộ 2 chiều: Kéo dữ liệu mới nhất từ Google Sheets về App
+      try {
+        await GoogleSheetsService.pullFromGoogleSheets();
+      } catch (err) {
+        console.warn('Google Sheets auto-pull at startup warning:', err);
+      }
+
+      // 3. Đảm bảo tài khoản quản trị tồn tại
       await StorageService.initializeDatabaseIfEmpty();
 
-      // 3. Đăng nhập phiên làm việc hiện tại nếu đã lưu
+      // 4. Đăng nhập phiên làm việc hiện tại nếu đã lưu
       const user = StorageService.getCurrentUser();
       if (user) {
         // Kiểm tra xem user này còn tồn tại và active không
@@ -72,26 +79,54 @@ export default function App() {
     const handleOnline = () => {
       setIsOnline(true);
       CloudService.triggerAutoSave(300);
+      GoogleSheetsService.pullFromGoogleSheets().then((res) => {
+        if (res.success) setRefreshKey((k) => k + 1);
+      });
     };
     const handleOffline = () => setIsOnline(false);
     const handleSyncStatusUpdate = () => {
       setSyncStatus(StorageService.getSyncStatus());
     };
 
+    const handleWindowFocus = () => {
+      if (navigator.onLine) {
+        GoogleSheetsService.pullFromGoogleSheets().then((res) => {
+          if (res.success) setRefreshKey((k) => k + 1);
+        });
+      }
+    };
+
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
+    window.addEventListener('focus', handleWindowFocus);
     window.addEventListener('gfr_data_change', handleSyncStatusUpdate);
 
     const interval = setInterval(() => {
       setSyncStatus(StorageService.getSyncStatus());
     }, 2000);
 
+    // Chu kỳ tự động đồng bộ 2 chiều ngầm với Google Sheets mỗi 25 giây
+    const periodicSyncTimer = setInterval(async () => {
+      if (typeof navigator !== 'undefined' && navigator.onLine) {
+        try {
+          const res = await GoogleSheetsService.pullFromGoogleSheets();
+          if (res.success && res.importedCount && res.importedCount > 0) {
+            setRefreshKey((k) => k + 1);
+          }
+        } catch {
+          // ignore background fetch error
+        }
+      }
+    }, 25000);
+
     return () => {
       unsubscribeCloudSync();
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('focus', handleWindowFocus);
       window.removeEventListener('gfr_data_change', handleSyncStatusUpdate);
       clearInterval(interval);
+      clearInterval(periodicSyncTimer);
     };
   }, []);
 

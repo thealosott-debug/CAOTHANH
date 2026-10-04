@@ -98,8 +98,6 @@ function doPost(e) {
           var sheet = spreadsheet.getSheetByName(sheetName);
           if (!sheet) {
             sheet = spreadsheet.insertSheet(sheetName);
-          } else {
-            sheet.clear(); // Xóa sạch dữ liệu cũ để cập nhật mới
           }
 
           var numRows = rows.length;
@@ -121,7 +119,39 @@ function doPost(e) {
             sanitizedRows.push(newRow);
           }
 
-          var range = sheet.getRange(1, 1, numRows, numCols);
+          // Bảo toàn dữ liệu: Nếu sheet có sẵn dữ liệu và sheetName là USERS hoặc HOUSEHOLDS,
+          // tiến hành hợp nhất thông minh theo cột khóa chính (USERNAME / HOUSEHOLD_ID)
+          // để KHÔNG BAO GIỜ xóa nhầm các tài khoản hoặc hộ mà người dùng đã tạo trên Google Sheet
+          if (sheet.getLastRow() > 1 && (sheetName === 'USERS' || sheetName === 'HOUSEHOLDS')) {
+            try {
+              var existingValues = sheet.getRange(1, 1, sheet.getLastRow(), sheet.getLastColumn()).getValues();
+              var keyColIdx = (sheetName === 'USERS') ? 1 : 0; // USERNAME là cột 2 (idx 1), HOUSEHOLD_ID là cột 1 (idx 0)
+              
+              var incomingKeyMap = {};
+              for (var ir = 1; ir < sanitizedRows.length; ir++) {
+                var kVal = String(sanitizedRows[ir][keyColIdx] || '').toLowerCase().trim();
+                if (kVal) incomingKeyMap[kVal] = true;
+              }
+
+              // Giữ lại mọi tài khoản hoặc hộ đang có trên Google Sheets
+              for (var er = 1; er < existingValues.length; er++) {
+                var eKey = String(existingValues[er][keyColIdx] || '').toLowerCase().trim();
+                if (eKey && !incomingKeyMap[eKey]) {
+                  var preservedRow = [];
+                  for (var pc = 0; pc < numCols; pc++) {
+                    preservedRow.push(existingValues[er][pc] !== undefined ? existingValues[er][pc] : '');
+                  }
+                  sanitizedRows.push(preservedRow);
+                }
+              }
+            } catch (mergeErr) {
+              // Bỏ qua nếu sheet chưa đủ cấu trúc
+            }
+          }
+
+          sheet.clear();
+          var finalNumRows = sanitizedRows.length;
+          var range = sheet.getRange(1, 1, finalNumRows, numCols);
           range.setValues(sanitizedRows);
 
           // Định dạng tiêu đề màu xanh ngọc bảo NCKH

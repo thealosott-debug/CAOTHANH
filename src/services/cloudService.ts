@@ -63,6 +63,14 @@ export class CloudService {
 
       const result = await res.json();
       this.isSaving = false;
+
+      // Kéo ngược tức thời sau khi đẩy để dữ liệu 2 bên thông suốt 100%
+      if (includeSheetsPush) {
+        setTimeout(() => {
+          GoogleSheetsService.pullFromGoogleSheets().catch(() => {});
+        }, 500);
+      }
+
       return { success: true, message: result.message || 'Đã lưu lên Cloud thành công!' };
     } catch (err: any) {
       this.isSaving = false;

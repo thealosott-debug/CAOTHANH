@@ -420,6 +420,10 @@ export class GoogleSheetsService {
               targetModule: 'GOOGLE_SHEETS',
               reason: `Đồng bộ thành công 17 sheets lên Google Sheets qua Cloud Backend lúc ${new Date().toLocaleTimeString('vi-VN')}`
             });
+            // Tự động kéo ngược dữ liệu mới nhất từ Google Sheets về App đảm bảo 2 chiều thông suốt
+            setTimeout(() => {
+              this.pullFromGoogleSheets().catch(() => {});
+            }, 300);
             return {
               success: true,
               message: 'Đã lưu và đồng bộ toàn bộ 17 Sheet lên Google Sheets thành công!'

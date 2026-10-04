@@ -21,7 +21,6 @@
       "id": "USR_ADMIN_01",
       "username": "admin",
       "fullName": "Quản trị viên (Chủ nhiệm đề tài)",
-      "email": "admin@research.vn",
       "phone": "0912345678",
       "role": "ADMIN",
       "status": "ACTIVE",
@@ -647,6 +646,42 @@
       "salt": "SALT_H_40",
       "plainPasswordHint": "123456",
       "createdAt": "2026-10-04T11:20:50.330Z"
+    },
+    {
+      "id": "USR_1791112046263",
+      "username": "ct",
+      "fullName": "dsadsa",
+      "phone": "",
+      "role": "SUPERVISOR",
+      "status": "ACTIVE",
+      "passwordHash": "6ea4b03313c398acfba28e0ed31f71098f489a760c9b0981d7c24a738a62e0bd",
+      "salt": "8ptCoV*unf5qDl%D",
+      "plainPasswordHint": "123456",
+      "createdAt": "2026-10-04T11:31:34.772Z"
+    },
+    {
+      "id": "USR_1791112077608",
+      "username": "hs",
+      "fullName": "sấ",
+      "phone": "",
+      "role": "RESEARCHER",
+      "status": "ACTIVE",
+      "passwordHash": "2acd65ddbfaee4bff0a9397507c9582fc679b2502b4c9a241322cd7443495062",
+      "salt": "rF*VOq5L1^P7fRrf",
+      "plainPasswordHint": "123456",
+      "createdAt": "2026-10-04T11:31:34.772Z"
+    },
+    {
+      "id": "USR_1791112087292",
+      "username": "hss",
+      "fullName": "sadas",
+      "phone": "",
+      "role": "RESEARCHER",
+      "status": "ACTIVE",
+      "passwordHash": "ca4141a345c0a7d2937492db562989705b105fe7340797fda65a13d17d99db0d",
+      "salt": "n6CNTARkgDenkg2!",
+      "plainPasswordHint": "123456",
+      "createdAt": "2026-10-04T11:31:34.772Z"
     }
   ],
   "households": [],
@@ -944,7 +979,7 @@
     }
   ],
   "createdAt": "2026-10-04T10:00:04.675Z",
-  "updatedAt": "2026-10-04T10:42:10.863Z",
+  "updatedAt": "2026-10-04T11:36:29.736Z",
   "forwardToGoogleSheets": true,
   "appsScriptUrl": "https://script.google.com/macros/s/AKfycby07SokU46mlK013-tGmlnu0GQFAg_zCpSuPE9l-Sb_geT340XMruiDPlAjVfCC0dQovg/exec",
   "spreadsheetId": "",
