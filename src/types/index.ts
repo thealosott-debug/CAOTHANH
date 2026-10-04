@@ -24,6 +24,7 @@ export interface User {
   status: AccountStatus;
   passwordHash: string;
   salt: string;
+  plainPasswordHint?: string; // Mật khẩu khởi tạo hiển thị (mặc định 123456)
   createdAt: string;
   lastLogin?: string;
 }

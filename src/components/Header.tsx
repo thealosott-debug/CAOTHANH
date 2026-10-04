@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Leaf,
   Wifi,
@@ -10,9 +10,11 @@ import {
   User as UserIcon,
   Shield,
   Layers,
-  Home
+  Home,
+  KeyRound,
 } from 'lucide-react';
 import { Role, SyncStatus, User } from '../types';
+import { ChangePasswordModal } from './ChangePasswordModal';
 
 interface HeaderProps {
   currentUser: User | null;
@@ -33,6 +35,8 @@ export const Header: React.FC<HeaderProps> = ({
   onSyncSheets,
   onOpenUserGuide,
 }) => {
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
+
   return (
     <header className="bg-emerald-900 text-white shadow-md sticky top-0 z-40">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -161,6 +165,16 @@ export const Header: React.FC<HeaderProps> = ({
                   </div>
                 </div>
 
+                {/* Change Password Button */}
+                <button
+                  onClick={() => setIsChangePasswordOpen(true)}
+                  className="p-1.5 rounded-xl bg-emerald-800/80 hover:bg-emerald-700 text-emerald-200 hover:text-white transition-colors flex items-center space-x-1"
+                  title="Đổi mật khẩu tài khoản của bạn"
+                >
+                  <KeyRound className="w-4 h-4 text-emerald-300" />
+                  <span className="hidden xl:inline text-[11px] font-bold">Đổi MK</span>
+                </button>
+
                 {/* Logout Button */}
                 <button
                   onClick={onLogout}
@@ -174,6 +188,15 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Modal Đổi mật khẩu cho người dùng hiện tại */}
+      {currentUser && (
+        <ChangePasswordModal
+          isOpen={isChangePasswordOpen}
+          onClose={() => setIsChangePasswordOpen(false)}
+          currentUser={currentUser}
+        />
+      )}
     </header>
   );
 };

@@ -26,7 +26,7 @@ import {
 } from 'lucide-react';
 import { StorageService } from '../services/storage';
 import { CloudService } from '../services/cloudService';
-import { verifyPassword } from '../utils/crypto';
+import { generateSalt, hashPassword, verifyPassword } from '../utils/crypto';
 import { Role, User } from '../types';
 import { UserGuideModal } from '../components/UserGuideModal';
 
@@ -98,7 +98,38 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess, onOpenCwmGuide }) 
         return;
       }
 
-      const isValid = await verifyPassword(password, user.salt, user.passwordHash);
+      let isValid = false;
+      if (user.passwordHash && user.salt) {
+        isValid = await verifyPassword(password, user.salt, user.passwordHash);
+      }
+
+      // Hỗ trợ trường hợp mật khẩu mặc định 123456 (hoặc admin123 cho admin ban đầu)
+      if (!isValid && (!user.passwordHash || user.passwordHash.trim() === '')) {
+        if (password === '123456' || (user.username === 'admin' && password === 'admin123')) {
+          isValid = true;
+          const salt = generateSalt(16);
+          const hash = await hashPassword(password, salt);
+          user.passwordHash = hash;
+          user.salt = salt;
+          user.plainPasswordHint = password;
+          const allUsers = StorageService.getUsers().map((u) => (u.id === user.id ? user : u));
+          StorageService.saveUsers(allUsers);
+          CloudService.triggerAutoSave(50);
+        }
+      }
+
+      // Đối với tài khoản admin ban đầu nếu chưa từng đổi mật khẩu thì chấp nhận cả 123456 và admin123
+      if (!isValid && user.username === 'admin') {
+        const hashAdmin123 = await hashPassword('admin123', user.salt);
+        const hash123456 = await hashPassword('123456', user.salt);
+        if (
+          (user.passwordHash === hashAdmin123 || user.passwordHash === hash123456) &&
+          (password === '123456' || password === 'admin123')
+        ) {
+          isValid = true;
+        }
+      }
+
       if (!isValid) {
         setError('Tên đăng nhập hoặc mật khẩu không chính xác.');
         setIsLoading(false);

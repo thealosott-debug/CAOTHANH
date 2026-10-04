@@ -91,7 +91,7 @@ export const AccountManagement: React.FC<AccountManagementProps> = ({
       organization: '',
       role: 'RESEARCHER',
       householdId: 'H01',
-      password: 'farm' + Math.floor(100 + Math.random() * 900),
+      password: '123456',
     });
     setFormError('');
     setIsAddModalOpen(true);
@@ -112,7 +112,7 @@ export const AccountManagement: React.FC<AccountManagementProps> = ({
     }
 
     const salt = generateSalt(16);
-    const passwordHash = await hashPassword(newAccountData.password, salt);
+    const passwordHash = await hashPassword(newAccountData.password.trim(), salt);
 
     const newUser: User = {
       id: `USR_${Date.now()}`,
@@ -127,6 +127,7 @@ export const AccountManagement: React.FC<AccountManagementProps> = ({
       status: 'ACTIVE',
       passwordHash,
       salt,
+      plainPasswordHint: newAccountData.password.trim(),
       createdAt: new Date().toISOString(),
     };
 
@@ -192,13 +193,23 @@ export const AccountManagement: React.FC<AccountManagementProps> = ({
 
     const currentList = users.map((item) =>
       item.id === resetUser.id
-        ? { ...item, passwordHash: hash, salt }
+        ? {
+            ...item,
+            passwordHash: hash,
+            salt,
+            plainPasswordHint: newPasswordInput.trim(),
+          }
         : item
     );
 
     StorageService.saveUsers(currentList);
     setUsers(currentList);
     CloudService.triggerAutoSave(50);
+
+    if (currentUser.id === resetUser.id) {
+      const updatedSelf = currentList.find((u) => u.id === currentUser.id);
+      if (updatedSelf) StorageService.setCurrentUser(updatedSelf);
+    }
 
     StorageService.addAuditLog({
       userId: currentUser.id,
@@ -207,7 +218,7 @@ export const AccountManagement: React.FC<AccountManagementProps> = ({
       action: 'UPDATE',
       targetModule: 'USERS_PASSWORD',
       householdId: resetUser.householdId,
-      reason: `Admin đặt lại mật khẩu mới an toàn cho tài khoản ${resetUser.username}.`,
+      reason: `Đặt lại mật khẩu mới an toàn cho tài khoản ${resetUser.username}.`,
     });
 
     setResetUser(null);
@@ -352,6 +363,7 @@ export const AccountManagement: React.FC<AccountManagementProps> = ({
                 <th className="py-3 px-3">Mã Hộ</th>
                 <th className="py-3 px-3">Số điện thoại</th>
                 <th className="py-3 px-3">Trạng thái</th>
+                <th className="py-3 px-3 text-center">Mật khẩu</th>
                 <th className="py-3 px-3 text-center">Thao tác an toàn</th>
               </tr>
             </thead>
@@ -404,12 +416,30 @@ export const AccountManagement: React.FC<AccountManagementProps> = ({
                       </span>
                     </td>
                     <td className="py-3 px-3 text-center">
+                      <div className="inline-flex items-center space-x-1.5 bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-xl">
+                        <span className="font-mono font-bold text-slate-800 text-xs">
+                          {u.plainPasswordHint || '123456'}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setResetUser(u);
+                            setNewPasswordInput(u.plainPasswordHint || '123456');
+                          }}
+                          className="p-1 hover:bg-emerald-100 rounded-lg text-emerald-700 hover:text-emerald-800 transition-colors"
+                          title="Đổi mật khẩu cho tài khoản này"
+                        >
+                          <KeyRound className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </td>
+                    <td className="py-3 px-3 text-center">
                       <div className="flex items-center justify-center space-x-2">
                         {/* Đổi mật khẩu */}
                         <button
                           onClick={() => {
                             setResetUser(u);
-                            setNewPasswordInput('farm' + Math.floor(100 + Math.random() * 900));
+                            setNewPasswordInput(u.plainPasswordHint || '123456');
                           }}
                           className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-600 hover:text-emerald-700 transition-colors"
                           title="Đặt lại mật khẩu an toàn"

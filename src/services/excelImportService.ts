@@ -686,6 +686,7 @@ export class ExcelImportService {
             status: 'ACTIVE',
             passwordHash,
             salt,
+            plainPasswordHint: '123456',
             createdAt: new Date().toISOString(),
           };
           userMap.set(username, newUser);
@@ -758,6 +759,7 @@ export class ExcelImportService {
         status: existing ? existing.status : 'ACTIVE',
         passwordHash,
         salt,
+        plainPasswordHint: r.password || (existing ? existing.plainPasswordHint : '123456'),
         createdAt: existing ? existing.createdAt : new Date().toISOString(),
       };
 

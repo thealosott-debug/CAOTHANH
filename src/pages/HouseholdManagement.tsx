@@ -295,6 +295,7 @@ export const HouseholdManagement: React.FC<HouseholdManagementProps> = ({
           status: 'ACTIVE',
           passwordHash: hHash,
           salt: hSalt,
+          plainPasswordHint: '123456',
           createdAt: new Date().toISOString(),
         });
         StorageService.saveUsers(userList);

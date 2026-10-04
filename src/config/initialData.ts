@@ -253,6 +253,7 @@ export const DEFAULT_USERS: User[] = [
     status: 'ACTIVE',
     passwordHash: '', // Sẽ được tính với salt khi khởi tạo
     salt: 'SALT_ADMIN_999',
+    plainPasswordHint: '123456',
     createdAt: new Date().toISOString(),
   }
 ];

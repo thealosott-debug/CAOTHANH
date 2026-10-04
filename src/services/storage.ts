@@ -412,7 +412,7 @@ export class StorageService {
     // Chỉ bổ sung tài khoản Admin mặc định nếu hệ thống chưa từng có admin
     if (!hasAdmin) {
       const salt = 'SALT_ADMIN_999';
-      const hash = await hashPassword('admin123', salt);
+      const hash = await hashPassword('123456', salt);
       const adminUser: User = {
         id: 'USR_ADMIN_01',
         username: 'admin',
@@ -423,6 +423,7 @@ export class StorageService {
         status: 'ACTIVE',
         passwordHash: hash,
         salt,
+        plainPasswordHint: '123456',
         createdAt: new Date().toISOString(),
       };
       // Giữ nguyên toàn bộ tài khoản người dùng đã tạo trước đó

@@ -13,10 +13,12 @@ import {
   ShieldCheck,
   Check,
   Smile,
+  KeyRound,
 } from 'lucide-react';
 import { BC05Record, BC06Record, Household, User, WeekNumber } from '../types';
 import { StorageService } from '../services/storage';
 import { COMMON_BARRIERS } from '../config/initialData';
+import { ChangePasswordModal } from '../components/ChangePasswordModal';
 
 interface HouseholdPortalProps {
   user: User;
@@ -62,6 +64,7 @@ export const HouseholdPortal: React.FC<HouseholdPortalProps> = ({ user, onRefres
   const [selectedBarriers, setSelectedBarriers] = useState<string[]>([]);
   const [otherBarrier, setOtherBarrier] = useState('');
   const [reportSuccessMsg, setReportSuccessMsg] = useState('');
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
 
   // Tab active trong mobile view: 'COMMITMENT' | 'WEEKLY' | 'HISTORY' | 'PROFILE'
   const [activeTab, setActiveTab] = useState<'COMMITMENT' | 'WEEKLY' | 'HISTORY' | 'PROFILE'>(
@@ -601,8 +604,31 @@ export const HouseholdPortal: React.FC<HouseholdPortalProps> = ({ user, onRefres
               <span className="font-semibold text-emerald-800">{household?.assignedResearcher}</span>
             </div>
           </div>
+
+          {/* Nút Đổi mật khẩu cho hộ chăn nuôi */}
+          <div className="pt-4 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={() => setIsChangePasswordOpen(true)}
+              className="w-full py-3 bg-gradient-to-r from-emerald-700 to-teal-700 hover:from-emerald-800 hover:to-teal-800 text-white rounded-2xl font-bold flex items-center justify-center space-x-2 transition-all shadow-md text-xs cursor-pointer"
+            >
+              <KeyRound className="w-4 h-4 text-emerald-300" />
+              <span>ĐỔI MẬT KHẨU TÀI KHOẢN HỘ</span>
+            </button>
+            <p className="text-[11px] text-slate-500 text-center mt-2">
+              Mật khẩu mặc định là <code className="bg-slate-100 px-1 py-0.5 rounded font-mono font-bold text-slate-800">123456</code>. Sau khi đổi, mật khẩu mới sẽ được lưu lại và dùng cho các lần đăng nhập tiếp theo.
+            </p>
+          </div>
         </div>
       )}
+
+      {/* Modal Đổi Mật Khẩu */}
+      <ChangePasswordModal
+        isOpen={isChangePasswordOpen}
+        onClose={() => setIsChangePasswordOpen(false)}
+        currentUser={user}
+        onPasswordChanged={onRefreshData}
+      />
     </div>
   );
 };

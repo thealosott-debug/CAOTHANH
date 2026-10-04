@@ -23,7 +23,7 @@ export const RESEARCH_SHEETS: SheetDefinition[] = [
   {
     name: 'USERS',
     description: 'Danh sách tài khoản (đầy đủ thông tin xác thực an toàn)',
-    columns: ['USER_ID', 'USERNAME', 'FULL_NAME', 'PHONE', 'ROLE', 'HOUSEHOLD_ID', 'STATUS', 'TITLE', 'ORGANIZATION', 'PASSWORD_HASH', 'SALT', 'CREATED_AT']
+    columns: ['USER_ID', 'USERNAME', 'FULL_NAME', 'PHONE', 'ROLE', 'HOUSEHOLD_ID', 'STATUS', 'TITLE', 'ORGANIZATION', 'PASSWORD_HASH', 'SALT', 'DEFAULT_PASS', 'CREATED_AT']
   },
   {
     name: 'HOUSEHOLDS',
@@ -142,8 +142,8 @@ export class GoogleSheetsService {
 
     // 2. USERS
     payload['USERS'] = [
-      ['USER_ID', 'USERNAME', 'FULL_NAME', 'PHONE', 'ROLE', 'HOUSEHOLD_ID', 'STATUS', 'TITLE', 'ORGANIZATION', 'PASSWORD_HASH', 'SALT', 'CREATED_AT'],
-      ...users.map(u => [u.id, u.username, u.fullName, u.phone, u.role, u.householdId || '', u.status, u.title || '', u.organization || '', u.passwordHash, u.salt, u.createdAt])
+      ['USER_ID', 'USERNAME', 'FULL_NAME', 'PHONE', 'ROLE', 'HOUSEHOLD_ID', 'STATUS', 'TITLE', 'ORGANIZATION', 'PASSWORD_HASH', 'SALT', 'DEFAULT_PASS', 'CREATED_AT'],
+      ...users.map(u => [u.id, u.username, u.fullName, u.phone, u.role, u.householdId || '', u.status, u.title || '', u.organization || '', u.passwordHash, u.salt, u.plainPasswordHint || '123456', u.createdAt])
     ];
 
     // 3. HOUSEHOLDS
