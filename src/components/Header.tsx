@@ -22,7 +22,6 @@ interface HeaderProps {
   onOpenCwmGuide: () => void;
   onSyncSheets: () => void;
   onOpenUserGuide?: () => void;
-  onSwitchUser?: (role: Role, householdId?: string) => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -33,7 +32,6 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenCwmGuide,
   onSyncSheets,
   onOpenUserGuide,
-  onSwitchUser,
 }) => {
   return (
     <header className="bg-emerald-900 text-white shadow-md sticky top-0 z-40">

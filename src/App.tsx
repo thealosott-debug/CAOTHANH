@@ -122,30 +122,6 @@ export default function App() {
     handleRefreshData();
   };
 
-  // Nút chuyển đổi nhanh tài khoản demo cho ban giám khảo
-  const handleSwitchUser = (role: Role, householdId?: string) => {
-    const users = StorageService.getUsers();
-    let target: User | undefined;
-    if (role === 'ADMIN') {
-      target = users.find((u) => u.role === 'ADMIN');
-    } else if (role === 'SUPERVISOR') {
-      target = users.find((u) => u.role === 'SUPERVISOR');
-    } else if (role === 'RESEARCHER') {
-      target = users.find((u) => u.role === 'RESEARCHER');
-    } else if (role === 'HOUSEHOLD') {
-      target = users.find((u) => u.householdId === (householdId || 'H01'));
-    }
-
-    if (target) {
-      StorageService.setCurrentUser(target);
-      setCurrentUser(target);
-      if (target.role === 'HOUSEHOLD') {
-        setActiveTab('BC06');
-      }
-      handleRefreshData();
-    }
-  };
-
   // 1. Chưa đăng nhập -> Hiện trang Đăng nhập
   if (!currentUser) {
     return (
@@ -153,10 +129,15 @@ export default function App() {
         <Login
           onLoginSuccess={handleLoginSuccess}
           onOpenCwmGuide={() => setIsCwmGuideOpen(true)}
+          onOpenUserGuide={() => setIsUserGuideOpen(true)}
         />
         <CwmGuideModal
           isOpen={isCwmGuideOpen}
           onClose={() => setIsCwmGuideOpen(false)}
+        />
+        <UserGuideModal
+          isOpen={isUserGuideOpen}
+          onClose={() => setIsUserGuideOpen(false)}
         />
       </>
     );
@@ -173,7 +154,7 @@ export default function App() {
           onLogout={handleLogout}
           onOpenCwmGuide={() => setIsCwmGuideOpen(true)}
           onSyncSheets={handleSyncSheets}
-          onSwitchUser={handleSwitchUser}
+          onOpenUserGuide={() => setIsUserGuideOpen(true)}
         />
 
         <main className="flex-1">
@@ -187,6 +168,10 @@ export default function App() {
         <CwmGuideModal
           isOpen={isCwmGuideOpen}
           onClose={() => setIsCwmGuideOpen(false)}
+        />
+        <UserGuideModal
+          isOpen={isUserGuideOpen}
+          onClose={() => setIsUserGuideOpen(false)}
         />
       </div>
     );
@@ -202,7 +187,7 @@ export default function App() {
         onLogout={handleLogout}
         onOpenCwmGuide={() => setIsCwmGuideOpen(true)}
         onSyncSheets={handleSyncSheets}
-        onSwitchUser={handleSwitchUser}
+        onOpenUserGuide={() => setIsUserGuideOpen(true)}
       />
 
       {/* Mobile Menu Bar trigger */}
@@ -326,6 +311,10 @@ export default function App() {
       <CwmGuideModal
         isOpen={isCwmGuideOpen}
         onClose={() => setIsCwmGuideOpen(false)}
+      />
+      <UserGuideModal
+        isOpen={isUserGuideOpen}
+        onClose={() => setIsUserGuideOpen(false)}
       />
     </div>
   );

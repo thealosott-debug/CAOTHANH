@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   BookOpen,
@@ -40,6 +40,12 @@ export const UserGuideModal: React.FC<UserGuideModalProps> = ({
   defaultTab = 'OVERVIEW',
 }) => {
   const [activeTab, setActiveTab] = useState<GuideTab>(defaultTab as GuideTab);
+
+  useEffect(() => {
+    if (isOpen && defaultTab) {
+      setActiveTab(defaultTab as GuideTab);
+    }
+  }, [isOpen, defaultTab]);
 
   if (!isOpen) return null;
 
