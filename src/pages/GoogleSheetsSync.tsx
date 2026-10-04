@@ -3,6 +3,7 @@ import {
   Sheet,
   CheckCircle,
   CloudUpload,
+  CloudDownload,
   RefreshCw,
   AlertTriangle,
   ExternalLink,
@@ -30,10 +31,32 @@ export const GoogleSheetsSync: React.FC<GoogleSheetsSyncProps> = ({
   const [config, setConfig] = useState<ResearchConfig>(StorageService.getConfig());
   const [isTesting, setIsTesting] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isPulling, setIsPulling] = useState(false);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState('');
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [syncResult, setSyncResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [pullResult, setPullResult] = useState<{ success: boolean; message: string } | null>(null);
   const [copiedCode, setCopiedCode] = useState(false);
+
+  const handlePullFromSheets = async () => {
+    setIsPulling(true);
+    setPullResult(null);
+    try {
+      const res = await GoogleSheetsService.pullFromGoogleSheets();
+      setPullResult({
+        success: res.success,
+        message: res.message,
+      });
+      if (onRefreshData) onRefreshData();
+    } catch (err: any) {
+      setPullResult({
+        success: false,
+        message: `Lỗi kết nối khi nạp từ Google Sheets: ${err.message}`,
+      });
+    } finally {
+      setIsPulling(false);
+    }
+  };
 
   const handleSaveConfig = (e: React.FormEvent) => {
     e.preventDefault();
@@ -91,24 +114,60 @@ export const GoogleSheetsSync: React.FC<GoogleSheetsSyncProps> = ({
           </p>
         </div>
 
-        <button
-          onClick={handleSyncAllSheets}
-          disabled={isSyncing}
-          className="px-5 py-2.5 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white rounded-xl text-xs font-bold flex items-center space-x-2 transition-all shadow-md"
-        >
-          {isSyncing ? (
-            <>
-              <RefreshCw className="w-4 h-4 animate-spin" />
-              <span>Đang đồng bộ 17 Sheets...</span>
-            </>
-          ) : (
-            <>
-              <CloudUpload className="w-4 h-4" />
-              <span>ĐỒNG BỘ LÊN GOOGLE SHEETS</span>
-            </>
-          )}
-        </button>
+        <div className="flex flex-wrap items-center gap-2.5">
+          <button
+            onClick={handlePullFromSheets}
+            disabled={isPulling}
+            className="px-4 py-2.5 bg-teal-700 hover:bg-teal-800 disabled:opacity-50 text-white rounded-xl text-xs font-bold flex items-center space-x-2 transition-all shadow-md"
+            title="Đồng bộ 2 chiều: Tải toàn bộ tài khoản và số liệu từ Google Sheets về ứng dụng"
+          >
+            {isPulling ? (
+              <>
+                <RefreshCw className="w-4 h-4 animate-spin text-teal-200" />
+                <span>Đang tải từ Sheets...</span>
+              </>
+            ) : (
+              <>
+                <CloudDownload className="w-4 h-4 text-teal-200" />
+                <span>TẢI DỮ LIỆU TỪ SHEETS VỀ APP</span>
+              </>
+            )}
+          </button>
+
+          <button
+            onClick={handleSyncAllSheets}
+            disabled={isSyncing}
+            className="px-5 py-2.5 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white rounded-xl text-xs font-bold flex items-center space-x-2 transition-all shadow-md"
+            title="Đẩy toàn bộ 17 Sheets lên Google Sheets"
+          >
+            {isSyncing ? (
+              <>
+                <RefreshCw className="w-4 h-4 animate-spin" />
+                <span>Đang đồng bộ 17 Sheets...</span>
+              </>
+            ) : (
+              <>
+                <CloudUpload className="w-4 h-4" />
+                <span>ĐỒNG BỘ LÊN GOOGLE SHEETS</span>
+              </>
+            )}
+          </button>
+        </div>
       </div>
+
+      {/* Pull Result Banner */}
+      {pullResult && (
+        <div
+          className={`p-4 rounded-2xl text-xs font-bold flex items-center space-x-2 shadow-xs animate-in fade-in ${
+            pullResult.success
+              ? 'bg-teal-50 border-2 border-teal-500 text-teal-900'
+              : 'bg-amber-50 border-2 border-amber-500 text-amber-900'
+          }`}
+        >
+          <CheckCircle className="w-5 h-5 shrink-0 text-teal-600" />
+          <span>{pullResult.message}</span>
+        </div>
+      )}
 
       {/* Permanent Fixed Link Banner */}
       <div className="bg-emerald-50 border-2 border-emerald-500 rounded-2xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-xs">

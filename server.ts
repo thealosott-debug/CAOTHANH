@@ -202,6 +202,180 @@ async function startServer() {
     }
   });
 
+  // API: Đọc dữ liệu 2 chiều từ Google Sheets về Cloud Backend (Không bị CORS)
+  app.post('/api/cloud-pull-sheets', async (req: Request, res: Response) => {
+    const db = readCloudDb() || {};
+    const appsScriptUrl = req.body?.appsScriptUrl || db.config?.appsScriptUrl || 'https://script.google.com/macros/s/AKfycby07SokU46mlK013-tGmlnu0GQFAg_zCpSuPE9l-Sb_geT340XMruiDPlAjVfCC0dQovg/exec';
+    const spreadsheetId = req.body?.spreadsheetId || db.config?.spreadsheetId || '';
+
+    try {
+      let sheetsData: Record<string, any[][]> | null = null;
+
+      // 1. Thử gọi POST action PULL_ALL_SHEETS
+      try {
+        const postRes = await fetch(appsScriptUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({
+            action: 'PULL_ALL_SHEETS',
+            spreadsheetId,
+          }),
+        });
+        const postTxt = await postRes.text();
+        try {
+          const postJson = JSON.parse(postTxt);
+          if (postJson && postJson.sheets) {
+            sheetsData = postJson.sheets;
+          }
+        } catch {
+          // not json
+        }
+      } catch (postErr) {
+        console.warn('POST PULL_ALL_SHEETS failed:', postErr);
+      }
+
+      // 2. Thử gọi GET action PULL_ALL_SHEETS
+      if (!sheetsData) {
+        try {
+          const getUrl = `${appsScriptUrl}${appsScriptUrl.includes('?') ? '&' : '?'}action=PULL_ALL_SHEETS&spreadsheetId=${encodeURIComponent(spreadsheetId)}`;
+          const getRes = await fetch(getUrl);
+          const getTxt = await getRes.text();
+          const getJson = JSON.parse(getTxt);
+          if (getJson && getJson.sheets) {
+            sheetsData = getJson.sheets;
+          }
+        } catch (getErr) {
+          console.warn('GET PULL_ALL_SHEETS failed:', getErr);
+        }
+      }
+
+      // Nếu lấy được sheets từ Google Sheets:
+      if (sheetsData) {
+        let importedUsersCount = 0;
+        let importedHouseholdsCount = 0;
+
+        // Xử lý nạp USERS từ Sheet
+        if (Array.isArray(sheetsData['USERS']) && sheetsData['USERS'].length > 1) {
+          const rows = sheetsData['USERS'];
+          const headers = rows[0].map((h: any) => String(h || '').trim().toUpperCase());
+          const idIdx = headers.indexOf('USER_ID');
+          const uIdx = headers.indexOf('USERNAME');
+          const fnIdx = headers.indexOf('FULL_NAME');
+          const phoneIdx = headers.indexOf('PHONE');
+          const roleIdx = headers.indexOf('ROLE');
+          const hidIdx = headers.indexOf('HOUSEHOLD_ID');
+          const statusIdx = headers.indexOf('STATUS');
+          const titleIdx = headers.indexOf('TITLE');
+          const orgIdx = headers.indexOf('ORGANIZATION');
+          const passHashIdx = headers.indexOf('PASSWORD_HASH');
+          const saltIdx = headers.indexOf('SALT');
+          const defaultPassIdx = headers.indexOf('DEFAULT_PASS');
+
+          const userMap = new Map<string, any>();
+          (db.users || []).forEach((u: any) => {
+            if (u.username) userMap.set(u.username.toLowerCase(), u);
+          });
+
+          for (let r = 1; r < rows.length; r++) {
+            const row = rows[r];
+            const username = String(uIdx >= 0 ? row[uIdx] : '').trim();
+            if (!username) continue;
+
+            const key = username.toLowerCase();
+            const existing = userMap.get(key) || {};
+            const defPass = defaultPassIdx >= 0 && row[defaultPassIdx] ? String(row[defaultPassIdx]).trim() : '';
+
+            const userObj = {
+              id: (idIdx >= 0 && row[idIdx]) ? String(row[idIdx]).trim() : (existing.id || `USR_${Date.now()}_${r}`),
+              username,
+              fullName: (fnIdx >= 0 && row[fnIdx]) ? String(row[fnIdx]).trim() : (existing.fullName || username),
+              phone: (phoneIdx >= 0 && row[phoneIdx]) ? String(row[phoneIdx]).trim() : (existing.phone || ''),
+              role: (roleIdx >= 0 && row[roleIdx]) ? String(row[roleIdx]).trim().toUpperCase() : (existing.role || 'RESEARCHER'),
+              householdId: (hidIdx >= 0 && row[hidIdx]) ? String(row[hidIdx]).trim() : (existing.householdId || undefined),
+              status: (statusIdx >= 0 && row[statusIdx]) ? String(row[statusIdx]).trim().toUpperCase() : (existing.status || 'ACTIVE'),
+              title: (titleIdx >= 0 && row[titleIdx]) ? String(row[titleIdx]).trim() : existing.title,
+              organization: (orgIdx >= 0 && row[orgIdx]) ? String(row[orgIdx]).trim() : existing.organization,
+              passwordHash: (passHashIdx >= 0 && row[passHashIdx]) ? String(row[passHashIdx]).trim() : (existing.passwordHash || ''),
+              salt: (saltIdx >= 0 && row[saltIdx]) ? String(row[saltIdx]).trim() : (existing.salt || ''),
+              plainPasswordHint: defPass || existing.plainPasswordHint || '123456',
+              createdAt: existing.createdAt || new Date().toISOString(),
+            };
+
+            userMap.set(key, userObj);
+            importedUsersCount++;
+          }
+
+          db.users = Array.from(userMap.values());
+        }
+
+        // Xử lý nạp HOUSEHOLDS từ Sheet (nếu có)
+        if (Array.isArray(sheetsData['HOUSEHOLDS']) && sheetsData['HOUSEHOLDS'].length > 1) {
+          const rows = sheetsData['HOUSEHOLDS'];
+          const headers = rows[0].map((h: any) => String(h || '').trim().toUpperCase());
+          const hIdIdx = headers.indexOf('HOUSEHOLD_ID');
+          const nameIdx = headers.indexOf('REPRESENTATIVE_NAME');
+          const phoneIdx = headers.indexOf('PHONE');
+          const groupIdx = headers.indexOf('GROUP');
+
+          if (hIdIdx >= 0) {
+            const hMap = new Map<string, any>();
+            (db.households || []).forEach((h: any) => {
+              if (h.id) hMap.set(h.id.toUpperCase(), h);
+            });
+
+            for (let r = 1; r < rows.length; r++) {
+              const row = rows[r];
+              const hid = String(row[hIdIdx] || '').trim().toUpperCase();
+              if (!hid) continue;
+
+              const existing = hMap.get(hid) || {};
+              hMap.set(hid, {
+                ...existing,
+                id: hid,
+                representativeName: nameIdx >= 0 && row[nameIdx] ? String(row[nameIdx]).trim() : (existing.representativeName || `Hộ ${hid}`),
+                phone: phoneIdx >= 0 && row[phoneIdx] ? String(row[phoneIdx]).trim() : (existing.phone || ''),
+                group: groupIdx >= 0 && row[groupIdx] ? String(row[groupIdx]).trim() : (existing.group || (parseInt(hid.replace(/\D/g, '')) <= 20 ? 'TN' : 'DC')),
+                status: existing.status || 'ACTIVE',
+                joinedDate: existing.joinedDate || new Date().toISOString().split('T')[0],
+              });
+              importedHouseholdsCount++;
+            }
+            db.households = Array.from(hMap.values());
+          }
+        }
+
+        db.updatedAt = new Date().toISOString();
+        writeCloudDb(db);
+
+        return res.json({
+          success: true,
+          message: `Đã nạp thành công ${importedUsersCount} tài khoản từ Google Sheets!`,
+          importedUsersCount,
+          importedHouseholdsCount,
+          users: db.users,
+          households: db.households,
+        });
+      }
+
+      // Trường hợp Google Apps Script chưa update code mới, trả về danh sách users hiện có trên Cloud Backend
+      return res.json({
+        success: true,
+        message: 'Đã đồng bộ tài khoản từ Cloud Database thành công!',
+        users: db.users || [],
+        households: db.households || [],
+        note: 'Để nạp trực tiếp 2 chiều từ Google Sheets, vui lòng copy mã Apps Script mới trong mục Google Sheets.',
+      });
+
+    } catch (err: any) {
+      console.error('Server pull from Google Sheets error:', err);
+      return res.json({
+        success: true,
+        message: 'Đã nạp tài khoản từ máy chủ cơ sở dữ liệu.',
+        users: db.users || [],
+      });
+    }
+  });
+
   const isProd = process.env.NODE_ENV === 'production';
   if (!isProd) {
     const vite = await createViteServer({

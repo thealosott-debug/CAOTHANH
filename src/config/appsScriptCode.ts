@@ -16,9 +16,33 @@ export const APPS_SCRIPT_SOURCE_CODE = `/**
  *    - Bấm "Triển khai" (Deploy).
  */
 
-// 1. Xử lý kiểm tra kết nối (GET Request)
+// 1. Xử lý yêu cầu GET (Kiểm tra kết nối và Đọc dữ liệu 2 chiều từ Google Sheets)
 function doGet(e) {
   var action = (e && e.parameter && e.parameter.action) ? e.parameter.action : 'PING';
+  var spreadsheetId = (e && e.parameter && e.parameter.spreadsheetId) ? e.parameter.spreadsheetId : '';
+
+  // Đọc toàn bộ dữ liệu từ Google Sheets về Web App
+  if (action === 'GET_ALL_SHEETS' || action === 'PULL_ALL_SHEETS' || action === 'GET_USERS' || action === 'READ_ALL') {
+    var spreadsheet;
+    if (spreadsheetId && spreadsheetId.trim() !== '') {
+      try {
+        spreadsheet = SpreadsheetApp.openById(spreadsheetId.trim());
+      } catch (err) {
+        spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+      }
+    } else {
+      spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    }
+
+    if (!spreadsheet) {
+      return ContentService.createTextOutput(JSON.stringify({
+        status: 'error',
+        message: 'Không tìm thấy Google Spreadsheet.'
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    return exportSpreadsheetData(spreadsheet);
+  }
   
   var responseData = {
     status: 'success',
@@ -30,7 +54,7 @@ function doGet(e) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
-// 2. Xử lý ghi toàn bộ 17 Sheets vào Google Sheets (POST Request)
+// 2. Xử lý yêu cầu POST (Ghi đồng bộ & Đọc 2 chiều)
 function doPost(e) {
   try {
     var rawData = e.postData.contents;
@@ -56,6 +80,11 @@ function doPost(e) {
     }
 
     var action = data.action || 'SYNC_ALL_SHEETS';
+
+    // ĐỌC DỮ LIỆU TỪ GOOGLE SHEETS VỀ APP (2-WAY SYNC)
+    if (action === 'PULL_ALL_SHEETS' || action === 'GET_ALL_SHEETS' || action === 'GET_USERS' || action === 'READ_ALL') {
+      return exportSpreadsheetData(spreadsheet);
+    }
 
     if (action === 'SYNC_ALL_SHEETS') {
       var sheetsData = data.sheets;
@@ -128,5 +157,31 @@ function doPost(e) {
       message: 'Lỗi xử lý Apps Script: ' + error.toString()
     })).setMimeType(ContentService.MimeType.JSON);
   }
+}
+
+// 3. Hàm tiện ích xuất toàn bộ dữ liệu bảng tính thành JSON
+function exportSpreadsheetData(spreadsheet) {
+  var allSheets = spreadsheet.getSheets();
+  var sheetsData = {};
+  for (var i = 0; i < allSheets.length; i++) {
+    var sheet = allSheets[i];
+    var sheetName = sheet.getName();
+    var lastRow = sheet.getLastRow();
+    var lastCol = sheet.getLastColumn();
+    if (lastRow > 0 && lastCol > 0) {
+      var values = sheet.getRange(1, 1, lastRow, lastCol).getValues();
+      sheetsData[sheetName] = values;
+    } else {
+      sheetsData[sheetName] = [];
+    }
+  }
+
+  return ContentService.createTextOutput(JSON.stringify({
+    status: 'success',
+    spreadsheetName: spreadsheet.getName(),
+    spreadsheetId: spreadsheet.getId(),
+    sheets: sheetsData,
+    timestamp: new Date().toISOString()
+  })).setMimeType(ContentService.MimeType.JSON);
 }
 `;

@@ -23,12 +23,75 @@ import {
   Wifi,
   Database,
   ExternalLink,
+  RefreshCw,
 } from 'lucide-react';
 import { StorageService } from '../services/storage';
 import { CloudService } from '../services/cloudService';
+import { GoogleSheetsService } from '../services/googleSheets';
 import { generateSalt, hashPassword, verifyPassword } from '../utils/crypto';
 import { Role, User } from '../types';
 import { UserGuideModal } from '../components/UserGuideModal';
+
+function normalizeStr(str: string): string {
+  return str
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[đĐ]/g, 'd')
+    .replace(/\s+/g, '');
+}
+
+function findUserFlexibly(users: User[], cleanInput: string, rawInput: string): User | undefined {
+  const noSpaceInput = cleanInput.replace(/\s+/g, '');
+  const digitsOnlyInput = rawInput.replace(/\D/g, '');
+  const normInput = normalizeStr(rawInput);
+
+  // 1. Khớp chính xác username (chữ thường)
+  let found = users.find((u) => u.username && u.username.toLowerCase() === cleanInput);
+  if (found) return found;
+
+  // 2. Khớp username bỏ khoảng trắng (vd: "hs 01" -> "hs01", "ct thanh" -> "ctthanh")
+  found = users.find((u) => u.username && u.username.toLowerCase().replace(/\s+/g, '') === noSpaceInput);
+  if (found) return found;
+
+  // 3. Khớp số điện thoại (chỉ lấy số, vd: "0988 111 222" -> "0988111222")
+  if (digitsOnlyInput.length >= 9) {
+    found = users.find((u) => u.phone && u.phone.replace(/\D/g, '') === digitsOnlyInput);
+    if (found) return found;
+  }
+
+  // 4. Khớp mã hộ (householdId, vd: "h01", "H01", "H-01")
+  found = users.find(
+    (u) =>
+      u.householdId &&
+      u.householdId.toLowerCase().replace(/[^a-z0-9]/g, '') === noSpaceInput.replace(/[^a-z0-9]/g, '')
+  );
+  if (found) return found;
+
+  // 5. Khớp Email
+  found = users.find((u) => u.email && u.email.toLowerCase().trim() === cleanInput);
+  if (found) return found;
+
+  // 6. Khớp Họ và tên (chính xác hoặc không dấu, vd: "Cao Thị Thanh", "cao thi thanh", "Học viên 01")
+  found = users.find(
+    (u) =>
+      u.fullName &&
+      (u.fullName.toLowerCase().trim() === cleanInput ||
+        normalizeStr(u.fullName) === normInput ||
+        (normInput.length >= 4 && normalizeStr(u.fullName).includes(normInput)))
+  );
+  if (found) return found;
+
+  // 7. Hỗ trợ alias phổ biến
+  if (noSpaceInput === 'ctthanh' || noSpaceInput === 'caothanh' || normInput === 'caothithanh') {
+    found = users.find(
+      (u) => u.username.toLowerCase() === 'ctthanh' || u.username.toLowerCase() === 'caothanh'
+    );
+    if (found) return found;
+  }
+
+  return undefined;
+}
 
 interface LoginProps {
   onLoginSuccess: (user: User) => void;
@@ -43,6 +106,9 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess, onOpenCwmGuide }) 
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncNotice, setSyncNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [showAccountList, setShowAccountList] = useState(false);
   const [showForgot, setShowForgot] = useState(false);
   const [isGuideOpen, setIsGuideOpen] = useState(false);
   const [guideTab, setGuideTab] = useState<GuideTabKey>('OVERVIEW');
@@ -54,9 +120,37 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess, onOpenCwmGuide }) 
     setIsGuideOpen(true);
   };
 
+  const handleSyncFromSheets = async () => {
+    setIsSyncing(true);
+    setSyncNotice(null);
+    setError('');
+    try {
+      const res = await GoogleSheetsService.pullFromGoogleSheets();
+      if (res.success) {
+        setSyncNotice({
+          type: 'success',
+          message: res.message || 'Đã đồng bộ thành công tài khoản từ Google Sheets!',
+        });
+      } else {
+        setSyncNotice({
+          type: 'error',
+          message: res.message || 'Chưa thể đồng bộ từ Google Sheets.',
+        });
+      }
+    } catch (err: any) {
+      setSyncNotice({
+        type: 'error',
+        message: `Lỗi kết nối: ${err.message}`,
+      });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setSyncNotice(null);
 
     if (!username.trim() || !password) {
       setError('Vui lòng nhập đầy đủ tên đăng nhập và mật khẩu.');
@@ -69,26 +163,30 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess, onOpenCwmGuide }) 
       const cleanInput = username.trim().toLowerCase();
       const cleanPass = password.trim();
 
-      // Luôn nạp dữ liệu mới nhất từ Cloud Server để nhận ngay tài khoản vừa được Admin tạo
+      // 1. Luôn nạp dữ liệu mới nhất từ Cloud Server để nhận ngay tài khoản vừa được Admin tạo
       await CloudService.loadFromCloud();
       let users = StorageService.getUsers();
 
-      let user = users.find(
-        (u) =>
-          u.username.toLowerCase() === cleanInput ||
-          (u.phone && u.phone.trim() === username.trim()) ||
-          (u.householdId && u.householdId.toLowerCase() === cleanInput)
-      );
+      // 2. Tra cứu tài khoản thông minh & linh hoạt (Username, Họ tên, SĐT, Mã hộ, Email)
+      let user = findUserFlexibly(users, cleanInput, username.trim());
 
-      // Hỗ trợ trường hợp người hướng dẫn đăng nhập bằng "ctthanh" hoặc "caothanh"
-      if (!user && (cleanInput === 'ctthanh' || cleanInput === 'caothanh')) {
-        user = users.find(
-          (u) => u.username.toLowerCase() === 'ctthanh' || u.username.toLowerCase() === 'caothanh'
-        );
+      // 3. NẾU CHƯA TÌM THẤY: Tự động kéo trực tiếp dữ liệu từ Google Sheets về ngay lập tức
+      if (!user) {
+        try {
+          const sheetPullRes = await GoogleSheetsService.pullFromGoogleSheets();
+          if (sheetPullRes.success && sheetPullRes.users) {
+            users = StorageService.getUsers();
+            user = findUserFlexibly(users, cleanInput, username.trim());
+          }
+        } catch (sheetErr) {
+          console.warn('Auto-pull from Google Sheets on login warning:', sheetErr);
+        }
       }
 
       if (!user) {
-        setError('Tên đăng nhập không tồn tại trong hệ thống. Vui lòng kiểm tra lại hoặc liên hệ Admin.');
+        setError(
+          `Tài khoản "${username}" chưa tìm thấy trong hệ thống. Vui lòng bấm nút "Đồng bộ từ Google Sheets" bên dưới hoặc xem danh sách tài khoản đã cấp.`
+        );
         setIsLoading(false);
         return;
       }
@@ -106,8 +204,8 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess, onOpenCwmGuide }) 
         isValid = await verifyPassword(cleanPass, user.salt, user.passwordHash);
       }
 
-      // 2. Kiểm tra nếu khớp với plainPasswordHint (nếu có lưu)
-      if (!isValid && user.plainPasswordHint && user.plainPasswordHint === cleanPass) {
+      // 2. Kiểm tra nếu khớp với plainPasswordHint (hoặc mật khẩu trên Sheet)
+      if (!isValid && user.plainPasswordHint && user.plainPasswordHint.trim() === cleanPass) {
         isValid = true;
       }
 
@@ -116,19 +214,10 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess, onOpenCwmGuide }) 
       // đều đăng nhập thành công với mật khẩu mặc định 123456
       if (!isValid && cleanPass === '123456') {
         isValid = true;
-        // Tự động chuẩn hóa và lưu lại hash chuẩn cho tài khoản này
-        const salt = generateSalt(16);
-        const hash = await hashPassword('123456', salt);
-        user.passwordHash = hash;
-        user.salt = salt;
-        user.plainPasswordHint = '123456';
-        const allUsers = StorageService.getUsers().map((u) => (u.id === user.id ? user : u));
-        StorageService.saveUsers(allUsers);
-        CloudService.triggerAutoSave(50);
       }
 
       // 4. Riêng tài khoản admin ban đầu có thể dùng cả admin123
-      if (!isValid && user.username.toLowerCase() === 'admin' && cleanPass === 'admin123') {
+      if (!isValid && user.username.toLowerCase() === 'admin' && (cleanPass === 'admin123' || cleanPass === '123456')) {
         isValid = true;
       }
 
@@ -136,6 +225,18 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess, onOpenCwmGuide }) 
         setError('Mật khẩu không chính xác. Mật khẩu mặc định hệ thống là: 123456.');
         setIsLoading(false);
         return;
+      }
+
+      // Tự động chuẩn hóa và lưu lại hash chuẩn cho tài khoản này nếu chưa có
+      if (!user.passwordHash || !user.salt || cleanPass === '123456') {
+        const salt = user.salt || generateSalt(16);
+        const hash = await hashPassword(cleanPass, salt);
+        user.passwordHash = hash;
+        user.salt = salt;
+        user.plainPasswordHint = cleanPass;
+        const allUsers = StorageService.getUsers().map((u) => (u.id === user.id ? user : u));
+        StorageService.saveUsers(allUsers);
+        CloudService.triggerAutoSave(50);
       }
 
       // Đăng nhập thành công
@@ -234,6 +335,19 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess, onOpenCwmGuide }) 
             {/* Form Đăng nhập */}
             <div className="bg-slate-800/90 backdrop-blur-md border border-slate-700/80 py-6 px-6 sm:px-7 shadow-2xl rounded-3xl">
               <form className="space-y-4" onSubmit={handleSubmit}>
+                {syncNotice && (
+                  <div
+                    className={`p-3 rounded-xl text-xs flex items-center space-x-2 animate-in fade-in ${
+                      syncNotice.type === 'success'
+                        ? 'bg-emerald-950/90 border border-emerald-600 text-emerald-200'
+                        : 'bg-amber-950/90 border border-amber-600 text-amber-200'
+                    }`}
+                  >
+                    <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+                    <span>{syncNotice.message}</span>
+                  </div>
+                )}
+
                 {error && (
                   <div className="bg-red-950/90 border border-red-700 text-red-200 text-xs p-3.5 rounded-xl flex items-start space-x-2 animate-in fade-in">
                     <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
@@ -243,7 +357,7 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess, onOpenCwmGuide }) 
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                    TÊN ĐĂNG NHẬP / MÃ HỘ / SỐ ĐIỆN THOẠI
+                    TÊN ĐĂNG NHẬP / HỌ TÊN / MÃ HỘ / SỐ ĐIỆN THOẠI
                   </label>
                   <div className="relative rounded-xl shadow-xs">
                     <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
@@ -253,7 +367,7 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess, onOpenCwmGuide }) 
                       type="text"
                       value={username}
                       onChange={(e) => setUsername(e.target.value)}
-                      placeholder="admin / h01 / 0912345678..."
+                      placeholder="admin / hs01 / ctthanh / h01 / 0988111222..."
                       required
                       autoComplete="username"
                       className="block w-full pl-10 pr-3 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white text-sm placeholder-slate-500 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
@@ -273,7 +387,7 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess, onOpenCwmGuide }) 
                       type="password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      placeholder="••••••••"
+                      placeholder="•••••••• (Mặc định: 123456)"
                       required
                       autoComplete="current-password"
                       className="block w-full pl-10 pr-3 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white text-sm placeholder-slate-500 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
@@ -298,8 +412,8 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess, onOpenCwmGuide }) 
                 {showForgot && (
                   <div className="p-3.5 bg-slate-900/95 border border-slate-700 rounded-xl text-xs text-slate-300 space-y-1.5 animate-in fade-in">
                     <p className="font-bold text-emerald-400">Hướng dẫn khôi phục mật khẩu:</p>
-                    <p>• <strong>Hộ chăn nuôi:</strong> Mật khẩu khởi tạo mặc định là <code className="bg-slate-800 text-amber-300 px-1 py-0.5 rounded">123456</code>. Nếu đã đổi và quên, vui lòng liên hệ Nghiên cứu viên hoặc Admin để cấp lại.</p>
-                    <p>• <strong>Cán bộ nghiên cứu:</strong> Liên hệ Chủ nhiệm đề tài (Admin) để đặt lại mật khẩu trong trang Quản lý Tài khoản.</p>
+                    <p>• <strong>Mật khẩu mặc định hệ thống:</strong> <code className="bg-slate-800 text-amber-300 px-1 py-0.5 rounded font-bold">123456</code> (áp dụng cho mọi tài khoản mới từ Google Sheets hoặc vừa được cấp).</p>
+                    <p>• <strong>Quên mật khẩu đã đổi:</strong> Vui lòng liên hệ Chủ nhiệm đề tài (Admin) để đặt lại mật khẩu trong trang Quản lý Tài khoản.</p>
                   </div>
                 )}
 
@@ -311,6 +425,83 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess, onOpenCwmGuide }) 
                   <span>{isLoading ? 'Đang xác thực hệ thống...' : 'ĐĂNG NHẬP VÀO HỆ THỐNG'}</span>
                   <ArrowRight className="w-4 h-4" />
                 </button>
+
+                {/* Nút bấm Đồng bộ tài khoản từ Google Sheets */}
+                <div className="pt-1">
+                  <button
+                    type="button"
+                    onClick={handleSyncFromSheets}
+                    disabled={isSyncing}
+                    className="w-full flex items-center justify-center space-x-2 py-2.5 px-3 rounded-xl bg-emerald-950/70 hover:bg-emerald-900/80 border border-emerald-600/50 hover:border-emerald-500 text-emerald-300 hover:text-emerald-100 text-xs font-bold transition-all shadow-xs cursor-pointer"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin text-emerald-300' : ''}`} />
+                    <span>{isSyncing ? 'Đang đồng bộ tài khoản từ Google Sheets...' : 'ĐỒNG BỘ TÀI KHOẢN TỪ GOOGLE SHEETS'}</span>
+                  </button>
+                </div>
+
+                {/* Danh sách tài khoản đã cấp - Hỗ trợ điền nhanh */}
+                <div className="pt-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setShowAccountList(!showAccountList)}
+                    className="w-full flex items-center justify-between py-1.5 px-3 rounded-xl bg-slate-900/60 hover:bg-slate-900 border border-slate-700/60 text-[11px] text-slate-300 font-medium transition-all"
+                  >
+                    <span className="flex items-center space-x-1.5">
+                      <Users className="w-3.5 h-3.5 text-teal-400" />
+                      <span>📋 Xem danh sách tài khoản đã cấp (Điền nhanh)</span>
+                    </span>
+                    <span className="text-emerald-400 font-bold">{showAccountList ? '▲ Ẩn' : '▼ Mở'}</span>
+                  </button>
+
+                  {showAccountList && (
+                    <div className="mt-2 p-3 bg-slate-900/95 border border-slate-700 rounded-2xl space-y-2 text-xs max-h-60 overflow-y-auto">
+                      <div className="text-[11px] text-emerald-300 font-semibold border-b border-slate-700 pb-1 flex justify-between">
+                        <span>Tài khoản hiện có (Mật khẩu mặc định: 123456)</span>
+                        <span className="text-slate-400">{StorageService.getUsers().length} tài khoản</span>
+                      </div>
+                      <div className="space-y-1.5">
+                        {StorageService.getUsers().map((u) => (
+                          <div
+                            key={u.id}
+                            onClick={() => {
+                              setUsername(u.username);
+                              setPassword(u.plainPasswordHint || '123456');
+                            }}
+                            className="p-2 rounded-xl bg-slate-800/80 hover:bg-emerald-950/60 border border-slate-700/60 hover:border-emerald-600/60 flex items-center justify-between cursor-pointer transition-all"
+                          >
+                            <div className="space-y-0.5">
+                              <div className="font-bold text-white flex items-center space-x-1.5">
+                                <span className="text-emerald-400 font-mono">{u.username}</span>
+                                <span className="text-slate-300 text-[11px]">({u.fullName})</span>
+                              </div>
+                              <div className="text-[10px] text-slate-400 flex items-center space-x-2">
+                                <span>
+                                  Vai trò:{' '}
+                                  <strong className="text-teal-300 font-semibold">
+                                    {u.role === 'ADMIN'
+                                      ? 'Admin'
+                                      : u.role === 'SUPERVISOR'
+                                      ? 'Người hướng dẫn'
+                                      : u.role === 'RESEARCHER'
+                                      ? 'Học viên'
+                                      : 'Hộ chăn nuôi'}
+                                  </strong>
+                                </span>
+                                {u.phone && <span>• SĐT: {u.phone}</span>}
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              className="px-2.5 py-1 bg-emerald-600/40 hover:bg-emerald-600 text-emerald-200 hover:text-white rounded-lg text-[10px] font-bold border border-emerald-500/40 shrink-0"
+                            >
+                              Chọn
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </form>
 
               {/* Thông tin hỗ trợ đăng nhập */}

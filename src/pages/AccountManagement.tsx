@@ -15,10 +15,12 @@ import {
   FileSpreadsheet,
   Download,
   GraduationCap,
+  RefreshCw,
 } from 'lucide-react';
 import { AccountStatus, Role, StudyGroup, User } from '../types';
 import { StorageService } from '../services/storage';
 import { CloudService } from '../services/cloudService';
+import { GoogleSheetsService } from '../services/googleSheets';
 import { generateSalt, hashPassword } from '../utils/crypto';
 import { ExcelImportModal } from '../components/ExcelImportModal';
 import { ExcelImportService } from '../services/excelImportService';
@@ -67,6 +69,37 @@ export const AccountManagement: React.FC<AccountManagementProps> = ({
   const [newPasswordInput, setNewPasswordInput] = useState('');
 
   const [formError, setFormError] = useState('');
+  const [isSyncingSheets, setIsSyncingSheets] = useState(false);
+  const [syncStatusMsg, setSyncStatusMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const handleSyncFromSheets = async () => {
+    setIsSyncingSheets(true);
+    setSyncStatusMsg(null);
+    try {
+      const res = await GoogleSheetsService.pullFromGoogleSheets();
+      const updated = StorageService.getUsers();
+      setUsers(updated);
+      if (res.success) {
+        setSyncStatusMsg({
+          type: 'success',
+          text: res.message || `Đã nạp thành công ${updated.length} tài khoản từ Google Sheets!`,
+        });
+      } else {
+        setSyncStatusMsg({
+          type: 'error',
+          text: res.message || 'Lỗi khi đồng bộ từ Google Sheets.',
+        });
+      }
+      if (onRefreshData) onRefreshData();
+    } catch (err: any) {
+      setSyncStatusMsg({
+        type: 'error',
+        text: `Lỗi kết nối: ${err.message}`,
+      });
+    } finally {
+      setIsSyncingSheets(false);
+    }
+  };
 
   // Lọc
   const filteredUsers = users.filter((u) => {
@@ -244,6 +277,15 @@ export const AccountManagement: React.FC<AccountManagementProps> = ({
 
         <div className="flex flex-wrap items-center gap-2">
           <button
+            onClick={handleSyncFromSheets}
+            disabled={isSyncingSheets}
+            className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-colors shadow-xs"
+            title="Đồng bộ 2 chiều: Tải danh sách tài khoản từ Google Sheets về hệ thống"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 text-white ${isSyncingSheets ? 'animate-spin' : ''}`} />
+            <span>{isSyncingSheets ? 'Đang đồng bộ...' : 'Đồng bộ từ Google Sheets'}</span>
+          </button>
+          <button
             onClick={() => setIsExcelModalOpen(true)}
             className="px-3.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-colors shadow-xs"
             title="Nhập danh sách Người hướng dẫn & Nghiên cứu viên bằng tệp Excel (.xlsx)"
@@ -268,6 +310,28 @@ export const AccountManagement: React.FC<AccountManagementProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Sync Status Banner */}
+      {syncStatusMsg && (
+        <div
+          className={`p-3.5 rounded-2xl text-xs font-semibold flex items-center justify-between shadow-xs animate-in fade-in ${
+            syncStatusMsg.type === 'success'
+              ? 'bg-emerald-100 border border-emerald-300 text-emerald-900'
+              : 'bg-amber-100 border border-amber-300 text-amber-900'
+          }`}
+        >
+          <div className="flex items-center space-x-2">
+            <CheckCircle className="w-4 h-4 shrink-0 text-emerald-700" />
+            <span>{syncStatusMsg.text}</span>
+          </div>
+          <button
+            onClick={() => setSyncStatusMsg(null)}
+            className="p-1 rounded text-slate-500 hover:text-slate-800"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* Handover Modal Card if newly created */}
       {handedOverAccount && (

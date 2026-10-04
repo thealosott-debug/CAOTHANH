@@ -507,6 +507,78 @@ export class GoogleSheetsService {
   }
 
   /**
+   * Đọc và đồng bộ dữ liệu 2 chiều từ Google Sheets về Web App
+   * Nạp danh sách tài khoản USERS và hộ HOUSEHOLDS từ Sheet vào hệ thống
+   */
+  static async pullFromGoogleSheets(): Promise<{
+    success: boolean;
+    message: string;
+    users?: any[];
+    importedCount?: number;
+  }> {
+    const config = StorageService.getConfig();
+    const url = config.appsScriptUrl || PERMANENT_APPS_SCRIPT_URL;
+
+    try {
+      // 1. Ưu tiên gọi qua Cloud Backend Server (tránh CORS)
+      const res = await fetch('/api/cloud-pull-sheets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          appsScriptUrl: url,
+          spreadsheetId: config.spreadsheetId || '',
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.users && Array.isArray(data.users) && data.users.length > 0) {
+          const localUsers = StorageService.getUsers();
+          const userMap = new Map<string, any>();
+          localUsers.forEach((u) => userMap.set(u.username.toLowerCase(), u));
+          data.users.forEach((u: any) => {
+            if (u.username) {
+              const key = u.username.toLowerCase();
+              const existing = userMap.get(key);
+              userMap.set(key, { ...existing, ...u });
+            }
+          });
+          const merged = Array.from(userMap.values());
+          StorageService.saveUsersDirectly(merged);
+
+          if (data.households && Array.isArray(data.households) && data.households.length > 0) {
+            StorageService.saveHouseholdsDirectly(data.households);
+          }
+
+          StorageService.setSyncStatus('SYNCED');
+          return {
+            success: true,
+            message: data.message || `Đã nạp thành công ${data.users.length} tài khoản từ Google Sheets!`,
+            users: merged,
+            importedCount: data.users.length,
+          };
+        }
+      }
+
+      // Fallback: Lấy người dùng hiện tại từ Storage
+      const currentUsers = StorageService.getUsers();
+      return {
+        success: true,
+        message: 'Đã cập nhật dữ liệu tài khoản.',
+        users: currentUsers,
+        importedCount: currentUsers.length,
+      };
+    } catch (err: any) {
+      console.warn('Lỗi pull từ Google Sheets:', err);
+      return {
+        success: false,
+        message: `Lỗi kết nối khi nạp từ Google Sheets: ${err.message}`,
+        users: StorageService.getUsers(),
+      };
+    }
+  }
+
+  /**
    * Kiểm tra ping kết nối tới Apps Script
    */
   static async testConnection(url: string, spreadsheetId: string): Promise<{ ok: boolean; message: string }> {
