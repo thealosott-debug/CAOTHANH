@@ -15,7 +15,6 @@ import {
 } from 'lucide-react';
 import { StorageService } from '../services/storage';
 import { GoogleSheetsService, RESEARCH_SHEETS } from '../services/googleSheets';
-import { CloudService } from '../services/cloudService';
 import { ResearchConfig, User } from '../types';
 import { APPS_SCRIPT_SOURCE_CODE } from '../config/appsScriptCode';
 
@@ -61,7 +60,7 @@ export const GoogleSheetsSync: React.FC<GoogleSheetsSyncProps> = ({
   const handleSaveConfig = (e: React.FormEvent) => {
     e.preventDefault();
     StorageService.saveConfig(config);
-    CloudService.triggerAutoSave(50);
+    GoogleSheetsService.triggerAutoSave(50);
     StorageService.addAuditLog({
       userId: currentUser.id,
       username: currentUser.username,
@@ -70,7 +69,7 @@ export const GoogleSheetsSync: React.FC<GoogleSheetsSyncProps> = ({
       targetModule: 'CONFIG_SHEETS',
       reason: `Cập nhật cấu hình kết nối Google Sheets (ID: ${config.spreadsheetId || 'Chưa có'}).`,
     });
-    setSaveSuccessMsg('Đã lưu cấu hình và tự động đồng bộ lên Cloud & Google Sheets thành công!');
+    setSaveSuccessMsg('Đã lưu cấu hình và tự động đồng bộ lên Google Sheets thành công!');
     setTimeout(() => setSaveSuccessMsg(''), 4000);
     if (onRefreshData) onRefreshData();
   };
@@ -90,8 +89,6 @@ export const GoogleSheetsSync: React.FC<GoogleSheetsSyncProps> = ({
   const handleSyncAllSheets = async () => {
     setIsSyncing(true);
     setSyncResult(null);
-    // Lưu đồng bộ toàn bộ dữ liệu vào Cloud Server & đẩy Google Sheets
-    await CloudService.saveAllToCloud(true);
     const res = await GoogleSheetsService.syncToGoogleSheets(config.appsScriptUrl);
     setSyncResult(res);
     setIsSyncing(false);
@@ -106,11 +103,11 @@ export const GoogleSheetsSync: React.FC<GoogleSheetsSyncProps> = ({
           <div className="flex items-center space-x-2">
             <Sheet className="w-6 h-6 text-emerald-600" />
             <h1 className="text-xl sm:text-2xl font-black text-slate-900">
-              KHO DỮ LIỆU GOOGLE SHEETS (17 SHEETS)
+              KHO DỮ LIỆU GOOGLE SHEETS TIẾNG VIỆT
             </h1>
           </div>
           <p className="text-xs text-slate-500 mt-1">
-            Trung tâm lưu trữ dữ liệu nghiên cứu đám mây • Kết nối bảo mật qua Google Apps Script Web App
+            Trung tâm dữ liệu lưu trữ vĩnh viễn trên Google Sheets • Đồng bộ tự động 2 chiều thông suốt
           </p>
         </div>
 

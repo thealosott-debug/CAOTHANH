@@ -300,7 +300,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser, onRefre
               <button
                 type="button"
                 onClick={() => {
-                  setModalTab('RESEARCH_TEAM');
+                  setModalTab('SUPERVISORS');
                   setIsExcelModalOpen(true);
                 }}
                 className="w-full py-2.5 px-3 bg-slate-900 hover:bg-black text-white rounded-xl text-xs font-bold flex items-center justify-center space-x-1.5 transition-colors shadow-xs"

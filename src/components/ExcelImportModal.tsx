@@ -11,22 +11,25 @@ import {
   Users,
   GraduationCap,
   Layers,
-  ArrowRight,
   RefreshCw,
   Info,
+  Shield,
+  Home,
+  Check,
 } from 'lucide-react';
 import { User } from '../types';
 import {
   ExcelImportService,
   ParsedHouseholdRow,
   ParsedUserRow,
+  UnifiedParseResult,
 } from '../services/excelImportService';
 
-export type ImportTab = 'HOUSEHOLDS' | 'RESEARCH_TEAM';
+export type ImportTab = 'ALL' | 'SUPERVISORS' | 'RESEARCHERS' | 'HOUSEHOLDS';
 
 interface ExcelImportModalProps {
   isOpen: boolean;
-  initialTab?: ImportTab;
+  initialTab?: 'HOUSEHOLDS' | 'RESEARCH_TEAM' | string;
   currentUser: User;
   onClose: () => void;
   onSuccess: () => void;
@@ -34,25 +37,23 @@ interface ExcelImportModalProps {
 
 export const ExcelImportModal: React.FC<ExcelImportModalProps> = ({
   isOpen,
-  initialTab = 'HOUSEHOLDS',
+  initialTab = 'ALL',
   currentUser,
   onClose,
   onSuccess,
 }) => {
-  const [activeTab, setActiveTab] = useState<ImportTab>(initialTab);
+  const [activeFilter, setActiveFilter] = useState<ImportTab>('ALL');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isParsing, setIsParsing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
+  const [importSuccessMsg, setImportSuccessMsg] = useState<string | null>(null);
 
-  // Parsed results
-  const [parsedHouseholds, setParsedHouseholds] = useState<ParsedHouseholdRow[]>([]);
-  const [parsedTeam, setParsedTeam] = useState<ParsedUserRow[]>([]);
-  const [sheetName, setSheetName] = useState<string>('');
+  // Kết quả phân tích tổng hợp đa bảng tính
+  const [parseResult, setParseResult] = useState<UnifiedParseResult | null>(null);
 
-  // Options
+  // Chế độ nhập (Gộp hoặc Thay thế)
   const [importMode, setImportMode] = useState<'MERGE' | 'REPLACE'>('MERGE');
-  const [createHouseholdAccounts, setCreateHouseholdAccounts] = useState(true);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -69,34 +70,20 @@ export const ExcelImportModal: React.FC<ExcelImportModalProps> = ({
     setSelectedFile(file);
     setIsParsing(true);
     setParseError(null);
-    setParsedHouseholds([]);
-    setParsedTeam([]);
+    setImportSuccessMsg(null);
+    setParseResult(null);
 
     try {
-      if (activeTab === 'HOUSEHOLDS') {
-        const result = await ExcelImportService.parseHouseholdsFile(file);
-        setParsedHouseholds(result.rows);
-        setSheetName(result.sheetName);
-      } else {
-        const result = await ExcelImportService.parseResearchTeamFile(file);
-        setParsedTeam(result.rows);
-        setSheetName(result.sheetName);
+      const result = await ExcelImportService.parseUniversalFile(file);
+      setParseResult(result);
+      if (result.totalRows === 0) {
+        setParseError('Tệp không chứa dòng dữ liệu nào sau dòng tiêu đề.');
       }
     } catch (err: any) {
       setParseError(err.message || 'Không thể đọc tệp Excel. Vui lòng kiểm tra định dạng.');
     } finally {
       setIsParsing(false);
     }
-  };
-
-  // Đổi tab
-  const handleTabChange = (tab: ImportTab) => {
-    setActiveTab(tab);
-    setSelectedFile(null);
-    setParsedHouseholds([]);
-    setParsedTeam([]);
-    setParseError(null);
-    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   // Kéo thả file
@@ -114,47 +101,51 @@ export const ExcelImportModal: React.FC<ExcelImportModalProps> = ({
 
   // Xác nhận nhập dữ liệu vào hệ thống
   const handleConfirmImport = async () => {
+    if (!parseResult) return;
     setIsSaving(true);
+    setParseError(null);
+
     try {
-      if (activeTab === 'HOUSEHOLDS') {
-        const res = await ExcelImportService.saveImportedHouseholds(
-          parsedHouseholds,
-          importMode,
-          createHouseholdAccounts,
-          currentUser
-        );
-        alert(
-          `✓ Nhập thành công ${res.savedCount} hộ chăn nuôi vào hệ thống!\n` +
-            (createHouseholdAccounts ? `✓ Đã tự động tạo ${res.accountsCreated} tài khoản đăng nhập cho các hộ (Mật khẩu mặc định: 123456).` : '')
-        );
-      } else {
-        const res = await ExcelImportService.saveImportedResearchTeam(
-          parsedTeam,
-          importMode,
-          currentUser
-        );
-        alert(
-          `✓ Nhập thành công ${res.savedCount} cán bộ (Người hướng dẫn / Nghiên cứu viên) vào hệ thống!`
-        );
-      }
+      const res = await ExcelImportService.saveUniversalImport(
+        parseResult,
+        importMode,
+        currentUser
+      );
+
+      setImportSuccessMsg(
+        `✓ ĐÃ NHẬP THÀNH CÔNG VÀO HỆ THỐNG:\n` +
+        `• ${res.usersCount} tài khoản đăng nhập (mật khẩu mặc định: 123456)\n` +
+        `  - ${res.supervisorsCount} Giảng viên (GV) & Cán bộ hướng dẫn (HDAN)\n` +
+        `  - ${res.researchersCount} Học sinh / Học viên (HS)\n` +
+        `  - ${res.householdsAccountCount} Tài khoản Hộ chăn nuôi gà\n` +
+        `• ${res.householdsCount} Hồ sơ Hộ chăn nuôi gà & Phiếu BC-01 liên thông\n` +
+        `• Đã kích hoạt đồng bộ lưu trữ vĩnh viễn lên Google Sheets!`
+      );
 
       onSuccess();
-      onClose();
+      setTimeout(() => {
+        onClose();
+      }, 2500);
     } catch (err: any) {
-      alert(`Lỗi khi lưu dữ liệu: ${err.message || 'Có lỗi xảy ra'}`);
+      setParseError(`Lỗi khi lưu dữ liệu: ${err.message || 'Có lỗi xảy ra'}`);
     } finally {
       setIsSaving(false);
     }
   };
 
-  const validHouseholdCount = parsedHouseholds.filter((r) => r.isValid).length;
-  const invalidHouseholdCount = parsedHouseholds.length - validHouseholdCount;
+  // Lọc danh sách hiển thị
+  const displayedUsers = parseResult
+    ? parseResult.users.filter((u) => {
+        if (activeFilter === 'ALL') return true;
+        if (activeFilter === 'SUPERVISORS') return u.role === 'SUPERVISOR';
+        if (activeFilter === 'RESEARCHERS') return u.role === 'RESEARCHER';
+        if (activeFilter === 'HOUSEHOLDS') return u.role === 'HOUSEHOLD';
+        return true;
+      })
+    : [];
 
-  const validTeamCount = parsedTeam.filter((r) => r.isValid).length;
-  const invalidTeamCount = parsedTeam.length - validTeamCount;
-
-  const currentValidCount = activeTab === 'HOUSEHOLDS' ? validHouseholdCount : validTeamCount;
-  const hasRows = activeTab === 'HOUSEHOLDS' ? parsedHouseholds.length > 0 : parsedTeam.length > 0;
+  const validCount = parseResult?.counts.validCount || 0;
+  const errorCount = parseResult?.counts.errorCount || 0;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto">
@@ -167,10 +158,10 @@ export const ExcelImportModal: React.FC<ExcelImportModalProps> = ({
             </div>
             <div>
               <h2 className="text-lg font-black text-slate-900 tracking-tight">
-                NHẬP DỮ LIỆU BẰNG TỆP EXCEL / CSV
+                TẢI TỆP DỮ LIỆU TÀI KHOẢN (HDAN, GV, HS, HỘ CHĂN NUÔI)
               </h2>
               <p className="text-xs text-slate-500">
-                Tự động đối soát, kiểm tra hợp lệ và nạp dữ liệu khoa học chuẩn
+                Tự động nhận diện đa bảng tính (.xlsx, .xls, .csv), kiểm tra hợp lệ và liên thông trực tiếp với Google Sheets
               </p>
             </div>
           </div>
@@ -182,72 +173,61 @@ export const ExcelImportModal: React.FC<ExcelImportModalProps> = ({
           </button>
         </div>
 
-        {/* Tab Selection */}
+        {/* Nút tải tệp mẫu chuẩn */}
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3 shrink-0">
-          <div className="flex p-1 bg-slate-100 rounded-xl space-x-1">
-            <button
-              onClick={() => handleTabChange('HOUSEHOLDS')}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center space-x-2 transition-all ${
-                activeTab === 'HOUSEHOLDS'
-                  ? 'bg-white text-emerald-800 shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <Users className="w-4 h-4" />
-              <span>1. Hộ chăn nuôi ({parsedHouseholds.length})</span>
-            </button>
-            <button
-              onClick={() => handleTabChange('RESEARCH_TEAM')}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center space-x-2 transition-all ${
-                activeTab === 'RESEARCH_TEAM'
-                  ? 'bg-white text-emerald-800 shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <GraduationCap className="w-4 h-4" />
-              <span>2. Người hướng dẫn &amp; Nghiên cứu viên ({parsedTeam.length})</span>
-            </button>
-          </div>
+          <span className="text-xs font-bold text-slate-700 flex items-center space-x-1.5">
+            <Download className="w-4 h-4 text-emerald-600" />
+            <span>TẢI TỆP MẪU EXCEL CHUẨN:</span>
+          </span>
 
-          {/* Quick template download buttons */}
-          <div className="flex items-center space-x-2">
-            {activeTab === 'HOUSEHOLDS' ? (
-              <button
-                type="button"
-                onClick={ExcelImportService.downloadHouseholdTemplate}
-                className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-colors shadow-2xs"
-                title="Tải mẫu bảng tính Excel gồm các cột chuẩn bị sẵn"
-              >
-                <Download className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Tải file mẫu Hộ (.xlsx)</span>
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={ExcelImportService.downloadResearchTeamTemplate}
-                className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-colors shadow-2xs"
-                title="Tải mẫu cán bộ nghiên cứu & người hướng dẫn"
-              >
-                <Download className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Tải file mẫu Cán bộ (.xlsx)</span>
-              </button>
-            )}
-
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={ExcelImportService.downloadCombinedTemplate}
-              className="hidden sm:flex px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold items-center space-x-1 transition-colors"
-              title="File mẫu chứa cả 2 sheet Hộ và Cán bộ"
+              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-colors shadow-2xs"
+              title="File mẫu chuẩn chứa đầy đủ Giảng viên, Học viên, Hướng dẫn và Hộ chăn nuôi"
             >
               <Layers className="w-3.5 h-3.5" />
-              <span>Mẫu tổng hợp (2 Sheets)</span>
+              <span>Mẫu Tổng Hợp Đầy Đủ (.xlsx)</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={ExcelImportService.downloadHouseholdTemplate}
+              className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-colors shadow-2xs"
+              title="Tải mẫu bảng tính riêng cho Hộ chăn nuôi gà"
+            >
+              <Home className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Mẫu Hộ chăn nuôi</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={ExcelImportService.downloadResearchTeamTemplate}
+              className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-colors shadow-2xs"
+              title="Tải mẫu cán bộ hướng dẫn, giảng viên và học viên"
+            >
+              <GraduationCap className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Mẫu GV &amp; HS &amp; HDAN</span>
             </button>
           </div>
         </div>
 
-        {/* Scrollable Main Area */}
+        {/* Banner thông báo thành công */}
+        {importSuccessMsg && (
+          <div className="p-4 bg-emerald-50 border-2 border-emerald-400 rounded-2xl text-xs font-bold text-emerald-900 space-y-1 animate-in fade-in">
+            <div className="flex items-center space-x-2 text-emerald-700 font-extrabold text-sm">
+              <CheckCircle className="w-5 h-5 text-emerald-600" />
+              <span>NHẬP DỮ LIỆU THÀNH CÔNG!</span>
+            </div>
+            <pre className="font-sans whitespace-pre-wrap leading-relaxed text-emerald-800">
+              {importSuccessMsg}
+            </pre>
+          </div>
+        )}
+
+        {/* Vùng kéo thả tệp */}
         <div className="flex-1 overflow-y-auto space-y-4 pr-1">
-          {/* File Upload Zone */}
           <div
             onDragOver={handleDragOver}
             onDrop={handleDrop}
@@ -261,276 +241,219 @@ export const ExcelImportModal: React.FC<ExcelImportModalProps> = ({
               onChange={handleFileChange}
               className="hidden"
             />
-            <div className="w-12 h-12 rounded-2xl bg-white text-emerald-600 shadow-sm mx-auto flex items-center justify-center group-hover:scale-105 transition-transform">
-              <Upload className="w-6 h-6" />
+            <div className="w-12 h-12 mx-auto rounded-2xl bg-white shadow-xs border border-emerald-200 text-emerald-600 flex items-center justify-center group-hover:scale-105 transition-transform">
+              {isParsing ? (
+                <RefreshCw className="w-6 h-6 animate-spin text-emerald-600" />
+              ) : (
+                <Upload className="w-6 h-6" />
+              )}
             </div>
             <div>
               <p className="text-sm font-bold text-slate-800">
-                {selectedFile ? (
-                  <span className="text-emerald-800 font-mono">Đã chọn: {selectedFile.name}</span>
-                ) : (
-                  <span>Kéo &amp; thả tệp Excel vào đây hoặc <span className="text-emerald-700 underline">bấm để chọn tệp</span></span>
-                )}
+                {selectedFile ? selectedFile.name : 'Bấm để chọn file hoặc kéo thả tệp Excel/CSV vào đây'}
               </p>
-              <p className="text-[11px] text-slate-500 mt-1">
-                Hỗ trợ định dạng: <strong>.XLSX</strong>, <strong>.XLS</strong>, hoặc <strong>.CSV</strong> • Dung lượng tối đa: 15MB
+              <p className="text-xs text-slate-500 mt-0.5">
+                Hỗ trợ tệp <strong>.xlsx, .xls, .csv</strong>. Tự động nhận diện tất cả các vai trò: <strong>HDAN, GV, HS, Hộ chăn nuôi</strong> và đọc nhiều bảng tính cùng lúc.
               </p>
             </div>
           </div>
 
-          {/* Loading or Parse Error */}
-          {isParsing && (
-            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 text-center text-xs font-bold text-slate-600 flex items-center justify-center space-x-2">
-              <RefreshCw className="w-4 h-4 animate-spin text-emerald-600" />
-              <span>Đang phân tích cấu trúc cột và đối soát dữ liệu tệp Excel...</span>
-            </div>
-          )}
-
+          {/* Thông báo lỗi */}
           {parseError && (
-            <div className="p-4 bg-red-50 border border-red-200 rounded-2xl text-xs text-red-700 flex items-start space-x-2">
-              <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
-              <div>
-                <p className="font-bold">Không thể đọc tệp Excel:</p>
-                <p className="mt-1">{parseError}</p>
-                <p className="mt-2 text-[11px] text-red-600">
-                  Gợi ý: Hãy bấm nút <strong>"Tải file mẫu Excel"</strong> ở góc trên, điền dữ liệu của bạn vào đúng cột rồi tải lên lại.
-                </p>
-              </div>
+            <div className="p-3.5 bg-red-50 border border-red-200 rounded-2xl text-xs text-red-700 flex items-start space-x-2 animate-in fade-in">
+              <AlertTriangle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+              <div className="font-medium whitespace-pre-line">{parseError}</div>
             </div>
           )}
 
-          {/* Preview: HOUSEHOLDS */}
-          {activeTab === 'HOUSEHOLDS' && parsedHouseholds.length > 0 && (
-            <div className="space-y-3">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-slate-50 p-3 rounded-2xl border border-slate-200 text-xs">
-                <div className="flex items-center space-x-2">
-                  <span className="font-bold text-slate-900">Sheet: {sheetName}</span>
-                  <span className="text-slate-400">•</span>
-                  <span className="text-emerald-700 font-bold">
-                    ✓ {validHouseholdCount} dòng hợp lệ
-                  </span>
-                  {invalidHouseholdCount > 0 && (
-                    <>
-                      <span className="text-slate-400">•</span>
-                      <span className="text-red-600 font-bold">
-                        ⚠ {invalidHouseholdCount} dòng lỗi
-                      </span>
-                    </>
-                  )}
+          {/* Kết quả đọc dữ liệu */}
+          {parseResult && parseResult.totalRows > 0 && (
+            <div className="space-y-3 animate-in fade-in">
+              {/* Thống kê các nhóm đối tượng tìm thấy */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                <div className="bg-amber-50 border border-amber-200 p-3 rounded-2xl">
+                  <div className="text-[11px] font-bold text-amber-800 uppercase">Cán bộ / Giảng viên</div>
+                  <div className="text-lg font-black text-amber-900 mt-0.5">
+                    {parseResult.counts.supervisors}{' '}
+                    <span className="text-xs font-normal text-amber-700">(HDAN, GV)</span>
+                  </div>
                 </div>
-                <span className="text-slate-500 text-[11px]">
-                  Hiển thị trước tối đa 20 dòng để đối soát
-                </span>
+
+                <div className="bg-blue-50 border border-blue-200 p-3 rounded-2xl">
+                  <div className="text-[11px] font-bold text-blue-800 uppercase">Học sinh / Học viên</div>
+                  <div className="text-lg font-black text-blue-900 mt-0.5">
+                    {parseResult.counts.researchers}{' '}
+                    <span className="text-xs font-normal text-blue-700">(HS, SV)</span>
+                  </div>
+                </div>
+
+                <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-2xl">
+                  <div className="text-[11px] font-bold text-emerald-800 uppercase">Hộ chăn nuôi gà</div>
+                  <div className="text-lg font-black text-emerald-900 mt-0.5">
+                    {parseResult.counts.households}{' '}
+                    <span className="text-xs font-normal text-emerald-700">(Hộ dân)</span>
+                  </div>
+                </div>
+
+                <div className="bg-purple-50 border border-purple-200 p-3 rounded-2xl">
+                  <div className="text-[11px] font-bold text-purple-800 uppercase">Quản trị viên / Khác</div>
+                  <div className="text-lg font-black text-purple-900 mt-0.5">
+                    {parseResult.counts.admins}{' '}
+                    <span className="text-xs font-normal text-purple-700">(Admin)</span>
+                  </div>
+                </div>
               </div>
 
-              <div className="overflow-x-auto border border-slate-200 rounded-2xl max-h-60">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead className="bg-slate-100 text-slate-700 font-bold sticky top-0 z-10">
+              {/* Bộ lọc xem nhanh */}
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
+                <div className="flex p-1 bg-slate-100 rounded-xl space-x-1 text-xs font-bold">
+                  <button
+                    type="button"
+                    onClick={() => setActiveFilter('ALL')}
+                    className={`px-3 py-1.5 rounded-lg transition-all ${
+                      activeFilter === 'ALL' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    Tất cả ({parseResult.totalRows})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveFilter('SUPERVISORS')}
+                    className={`px-3 py-1.5 rounded-lg transition-all ${
+                      activeFilter === 'SUPERVISORS' ? 'bg-white text-amber-800 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    HDAN &amp; GV ({parseResult.counts.supervisors})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveFilter('RESEARCHERS')}
+                    className={`px-3 py-1.5 rounded-lg transition-all ${
+                      activeFilter === 'RESEARCHERS' ? 'bg-white text-blue-800 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    Học sinh (HS) ({parseResult.counts.researchers})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveFilter('HOUSEHOLDS')}
+                    className={`px-3 py-1.5 rounded-lg transition-all ${
+                      activeFilter === 'HOUSEHOLDS' ? 'bg-white text-emerald-800 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    Hộ chăn nuôi ({parseResult.counts.households})
+                  </button>
+                </div>
+
+                <div className="text-xs text-slate-500">
+                  Các sheet nhận diện: <strong>{parseResult.sheetNames.join(', ')}</strong>
+                </div>
+              </div>
+
+              {/* Bảng xem trước dữ liệu */}
+              <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-2xs max-h-64 overflow-y-auto">
+                <table className="w-full text-left text-xs text-slate-700">
+                  <thead className="bg-slate-900 text-slate-200 uppercase font-extrabold text-[11px] sticky top-0">
                     <tr>
-                      <th className="py-2.5 px-3 border-b border-slate-200 text-center w-12">#</th>
-                      <th className="py-2.5 px-3 border-b border-slate-200">Trạng thái</th>
-                      <th className="py-2.5 px-3 border-b border-slate-200">Mã hộ</th>
-                      <th className="py-2.5 px-3 border-b border-slate-200">Tên chủ hộ</th>
-                      <th className="py-2.5 px-3 border-b border-slate-200">Số ĐT</th>
-                      <th className="py-2.5 px-3 border-b border-slate-200">Nhóm</th>
-                      <th className="py-2.5 px-3 border-b border-slate-200">Vật nuôi</th>
-                      <th className="py-2.5 px-3 border-b border-slate-200">Quy mô</th>
-                      <th className="py-2.5 px-3 border-b border-slate-200">NCV phụ trách</th>
+                      <th className="py-2.5 px-3">STT</th>
+                      <th className="py-2.5 px-3">Tên đăng nhập</th>
+                      <th className="py-2.5 px-3">Họ và tên</th>
+                      <th className="py-2.5 px-3">Vai trò nhận diện</th>
+                      <th className="py-2.5 px-3">Đơn vị / Địa chỉ</th>
+                      <th className="py-2.5 px-3">Số ĐT</th>
+                      <th className="py-2.5 px-3">Mật khẩu</th>
+                      <th className="py-2.5 px-3">Hợp lệ</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100 bg-white">
-                    {parsedHouseholds.slice(0, 20).map((h, idx) => (
-                      <tr key={idx} className={h.isValid ? 'hover:bg-slate-50' : 'bg-red-50/50'}>
-                        <td className="py-2 px-3 text-center text-slate-400 font-mono text-[11px]">
-                          {h.rowNumber}
-                        </td>
-                        <td className="py-2 px-3">
-                          {h.isValid ? (
-                            <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                              <CheckCircle className="w-3 h-3" />
-                              <span>Hợp lệ</span>
-                            </span>
-                          ) : (
-                            <span
-                              className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-800"
-                              title={h.errors.join('; ')}
-                            >
-                              <XCircle className="w-3 h-3" />
-                              <span>Lỗi ({h.errors[0]})</span>
-                            </span>
-                          )}
-                        </td>
-                        <td className="py-2 px-3 font-mono font-bold text-slate-900">{h.id}</td>
-                        <td className="py-2 px-3 font-semibold text-slate-800">{h.representativeName}</td>
-                        <td className="py-2 px-3 font-mono text-slate-600">{h.phone || '-'}</td>
+                  <tbody className="divide-y divide-slate-100">
+                    {displayedUsers.map((r, idx) => (
+                      <tr
+                        key={idx}
+                        className={r.isValid ? 'hover:bg-slate-50' : 'bg-red-50/70'}
+                      >
+                        <td className="py-2 px-3 font-mono text-slate-400">{r.rowNumber}</td>
+                        <td className="py-2 px-3 font-mono font-bold text-slate-900">{r.username}</td>
+                        <td className="py-2 px-3 font-semibold">{r.fullName}</td>
                         <td className="py-2 px-3">
                           <span
                             className={`px-2 py-0.5 rounded-md font-bold text-[10px] ${
-                              h.group === 'TN'
-                                ? 'bg-emerald-100 text-emerald-800'
-                                : 'bg-teal-100 text-teal-800'
-                            }`}
-                          >
-                            {h.group === 'TN' ? 'TN (Can thiệp)' : 'ĐC (Đối chứng)'}
-                          </span>
-                        </td>
-                        <td className="py-2 px-3 text-slate-600">{h.livestockType}</td>
-                        <td className="py-2 px-3 font-bold text-emerald-700">{h.herdSize} con</td>
-                        <td className="py-2 px-3 text-slate-600">{h.assignedResearcher || '-'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {/* Preview: RESEARCH TEAM */}
-          {activeTab === 'RESEARCH_TEAM' && parsedTeam.length > 0 && (
-            <div className="space-y-3">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-slate-50 p-3 rounded-2xl border border-slate-200 text-xs">
-                <div className="flex items-center space-x-2">
-                  <span className="font-bold text-slate-900">Sheet: {sheetName}</span>
-                  <span className="text-slate-400">•</span>
-                  <span className="text-emerald-700 font-bold">
-                    ✓ {validTeamCount} cán bộ hợp lệ
-                  </span>
-                  {invalidTeamCount > 0 && (
-                    <>
-                      <span className="text-slate-400">•</span>
-                      <span className="text-red-600 font-bold">
-                        ⚠ {invalidTeamCount} dòng lỗi
-                      </span>
-                    </>
-                  )}
-                </div>
-                <span className="text-slate-500 text-[11px]">
-                  Danh sách Người hướng dẫn &amp; Nghiên cứu viên
-                </span>
-              </div>
-
-              <div className="overflow-x-auto border border-slate-200 rounded-2xl max-h-60">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead className="bg-slate-100 text-slate-700 font-bold sticky top-0 z-10">
-                    <tr>
-                      <th className="py-2.5 px-3 border-b border-slate-200 text-center w-12">#</th>
-                      <th className="py-2.5 px-3 border-b border-slate-200">Trạng thái</th>
-                      <th className="py-2.5 px-3 border-b border-slate-200">Username</th>
-                      <th className="py-2.5 px-3 border-b border-slate-200">Họ và tên</th>
-                      <th className="py-2.5 px-3 border-b border-slate-200">Vai trò</th>
-                      <th className="py-2.5 px-3 border-b border-slate-200">Học hàm / Học vị</th>
-                      <th className="py-2.5 px-3 border-b border-slate-200">Đơn vị</th>
-                      <th className="py-2.5 px-3 border-b border-slate-200">Số ĐT</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 bg-white">
-                    {parsedTeam.slice(0, 20).map((u, idx) => (
-                      <tr key={idx} className={u.isValid ? 'hover:bg-slate-50' : 'bg-red-50/50'}>
-                        <td className="py-2 px-3 text-center text-slate-400 font-mono text-[11px]">
-                          {u.rowNumber}
-                        </td>
-                        <td className="py-2 px-3">
-                          {u.isValid ? (
-                            <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                              <CheckCircle className="w-3 h-3" />
-                              <span>Hợp lệ</span>
-                            </span>
-                          ) : (
-                            <span
-                              className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-800"
-                              title={u.errors.join('; ')}
-                            >
-                              <XCircle className="w-3 h-3" />
-                              <span>Lỗi</span>
-                            </span>
-                          )}
-                        </td>
-                        <td className="py-2 px-3 font-mono font-bold text-slate-900">{u.username}</td>
-                        <td className="py-2 px-3 font-semibold text-slate-800">{u.fullName}</td>
-                        <td className="py-2 px-3">
-                          <span
-                            className={`px-2 py-0.5 rounded-md font-bold text-[10px] ${
-                              u.role === 'SUPERVISOR'
+                              r.role === 'ADMIN'
                                 ? 'bg-purple-100 text-purple-800'
-                                : u.role === 'ADMIN'
+                                : r.role === 'SUPERVISOR'
                                 ? 'bg-amber-100 text-amber-800'
-                                : 'bg-blue-100 text-blue-800'
+                                : r.role === 'RESEARCHER'
+                                ? 'bg-blue-100 text-blue-800'
+                                : 'bg-emerald-100 text-emerald-800'
                             }`}
                           >
-                            {u.role === 'SUPERVISOR'
-                              ? 'Người hướng dẫn'
-                              : u.role === 'ADMIN'
-                              ? 'Quản trị viên'
-                              : 'Nghiên cứu viên'}
+                            {r.roleTitle || r.role}
                           </span>
                         </td>
-                        <td className="py-2 px-3 text-slate-600">{u.title || '-'}</td>
-                        <td className="py-2 px-3 text-slate-600">{u.organization || '-'}</td>
-                        <td className="py-2 px-3 font-mono text-slate-600">{u.phone || '-'}</td>
+                        <td className="py-2 px-3 text-slate-600">{r.organization || r.address || '-'}</td>
+                        <td className="py-2 px-3 font-mono">{r.phone || '-'}</td>
+                        <td className="py-2 px-3 font-mono text-slate-600">{r.password || '123456'}</td>
+                        <td className="py-2 px-3">
+                          {r.isValid ? (
+                            <span className="inline-flex items-center text-emerald-700 font-bold text-[11px]">
+                              <CheckCircle className="w-3.5 h-3.5 mr-1" /> Hợp lệ
+                            </span>
+                          ) : (
+                            <span
+                              className="inline-flex items-center text-red-600 font-bold text-[11px]"
+                              title={r.errors.join('; ')}
+                            >
+                              <XCircle className="w-3.5 h-3.5 mr-1" /> {r.errors[0]}
+                            </span>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-            </div>
-          )}
 
-          {/* Import Settings */}
-          {hasRows && (
-            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3 text-xs">
-              <span className="font-extrabold text-slate-900 uppercase tracking-wider text-[11px] block">
-                CẤU HÌNH NHẬP DỮ LIỆU
-              </span>
+              {/* Tùy chọn Gộp hoặc Thay thế */}
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3 text-xs">
+                <span className="font-extrabold text-slate-900 uppercase tracking-wider text-[11px] block">
+                  CẤU HÌNH ĐỒNG BỘ VÀO HỆ THỐNG
+                </span>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <label className="flex items-start space-x-2.5 p-2.5 rounded-xl border border-slate-200 bg-white cursor-pointer hover:border-emerald-400">
-                  <input
-                    type="radio"
-                    name="importMode"
-                    value="MERGE"
-                    checked={importMode === 'MERGE'}
-                    onChange={() => setImportMode('MERGE')}
-                    className="mt-0.5 text-emerald-600 focus:ring-emerald-500"
-                  />
-                  <div>
-                    <div className="font-bold text-slate-900">Gộp dữ liệu (Khuyên dùng)</div>
-                    <div className="text-[11px] text-slate-500">
-                      Cập nhật các dòng có cùng mã, giữ nguyên các bản ghi cũ khác.
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <label className="flex items-start space-x-2.5 p-2.5 rounded-xl border border-slate-200 bg-white cursor-pointer hover:border-emerald-400">
+                    <input
+                      type="radio"
+                      name="importMode"
+                      value="MERGE"
+                      checked={importMode === 'MERGE'}
+                      onChange={() => setImportMode('MERGE')}
+                      className="mt-0.5 text-emerald-600 focus:ring-emerald-500"
+                    />
+                    <div>
+                      <div className="font-bold text-slate-900">Gộp dữ liệu thông minh (Khuyên dùng)</div>
+                      <div className="text-[11px] text-slate-500">
+                        Thêm mới và cập nhật các dòng theo mã, bảo toàn toàn bộ tài khoản và phiếu khảo sát cũ.
+                      </div>
                     </div>
-                  </div>
-                </label>
+                  </label>
 
-                <label className="flex items-start space-x-2.5 p-2.5 rounded-xl border border-slate-200 bg-white cursor-pointer hover:border-red-400">
-                  <input
-                    type="radio"
-                    name="importMode"
-                    value="REPLACE"
-                    checked={importMode === 'REPLACE'}
-                    onChange={() => setImportMode('REPLACE')}
-                    className="mt-0.5 text-red-600 focus:ring-red-500"
-                  />
-                  <div>
-                    <div className="font-bold text-red-700">Thay thế toàn bộ</div>
-                    <div className="text-[11px] text-slate-500">
-                      Xóa toàn bộ danh sách hiện tại và thay thế bằng danh sách trong tệp Excel.
+                  <label className="flex items-start space-x-2.5 p-2.5 rounded-xl border border-slate-200 bg-white cursor-pointer hover:border-red-400">
+                    <input
+                      type="radio"
+                      name="importMode"
+                      value="REPLACE"
+                      checked={importMode === 'REPLACE'}
+                      onChange={() => setImportMode('REPLACE')}
+                      className="mt-0.5 text-red-600 focus:ring-red-500"
+                    />
+                    <div>
+                      <div className="font-bold text-red-700">Thay thế toàn bộ danh sách</div>
+                      <div className="text-[11px] text-slate-500">
+                        Thay thế toàn bộ danh sách bằng dữ liệu mới từ tệp (chỉ giữ lại tài khoản Admin tối cao).
+                      </div>
                     </div>
-                  </div>
-                </label>
+                  </label>
+                </div>
               </div>
-
-              {activeTab === 'HOUSEHOLDS' && (
-                <label className="flex items-center space-x-2 pt-1 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={createHouseholdAccounts}
-                    onChange={(e) => setCreateHouseholdAccounts(e.target.checked)}
-                    className="rounded-sm text-emerald-600 focus:ring-emerald-500 w-4 h-4"
-                  />
-                  <span className="font-medium text-slate-700">
-                    Tự động tạo tài khoản đăng nhập cho từng hộ chăn nuôi (Tên đăng nhập là mã hộ, ví dụ: <code>h01</code>, mật khẩu mặc định: <code>123456</code>).
-                  </span>
-                </label>
-              )}
             </div>
           )}
         </div>
@@ -548,20 +471,19 @@ export const ExcelImportModal: React.FC<ExcelImportModalProps> = ({
           <button
             type="button"
             onClick={handleConfirmImport}
-            disabled={!hasRows || currentValidCount === 0 || isSaving}
-            className="px-5 py-2.5 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-40 text-white font-bold rounded-xl text-xs flex items-center space-x-2 shadow-md transition-all"
+            disabled={!parseResult || validCount === 0 || isSaving}
+            className="px-6 py-2.5 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-40 text-white font-bold rounded-xl text-xs flex items-center space-x-2 shadow-md transition-all"
           >
             {isSaving ? (
               <>
                 <RefreshCw className="w-4 h-4 animate-spin" />
-                <span>Đang lưu vào hệ thống...</span>
+                <span>Đang lưu và đồng bộ lên Google Sheets...</span>
               </>
             ) : (
               <>
                 <FileCheck className="w-4 h-4" />
                 <span>
-                  XÁC NHẬN NHẬP {currentValidCount}{' '}
-                  {activeTab === 'HOUSEHOLDS' ? 'HỘ CHĂN NUÔI' : 'CÁN BỘ'} VÀO HỆ THỐNG
+                  XÁC NHẬN NHẬP TẤT CẢ {validCount} TÀI KHOẢN VÀO HỆ THỐNG
                 </span>
               </>
             )}

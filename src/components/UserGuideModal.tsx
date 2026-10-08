@@ -318,7 +318,7 @@ export const UserGuideModal: React.FC<UserGuideModalProps> = ({
                       <li>Vào mục <strong>Cài đặt hệ thống</strong> để tải file mẫu Excel và nạp danh sách Hộ / Cán bộ nghiên cứu.</li>
                       <li>Phân quyền, khóa/mở khóa tài khoản, cấp lại mật khẩu cho thành viên.</li>
                       <li>Mở khóa phiếu khảo sát (BC01-BC07) khi NCV cần chỉnh sửa sai sót có lý do hợp lệ.</li>
-                      <li>Kết nối và giám sát đồng bộ 17 Sheets lên Google Sheets đám mây.</li>
+                      <li>Kết nối và giám sát đồng bộ 2 chiều trực tiếp với Google Sheets.</li>
                     </ul>
                   </div>
                 </div>
@@ -552,18 +552,18 @@ export const UserGuideModal: React.FC<UserGuideModalProps> = ({
 
               <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs space-y-3">
                 <h4 className="font-black text-slate-900 text-sm flex items-center space-x-2">
-                  <Cloud className="w-4 h-4 text-emerald-700" />
-                  <span>2. Cơ chế Tự động lưu Đám mây & Đồng bộ Google Sheets</span>
+                  <FileSpreadsheet className="w-4 h-4 text-emerald-700" />
+                  <span>2. Cơ chế Lưu trữ Vĩnh viễn & Đồng bộ 2 Chiều với Google Sheets</span>
                 </h4>
                 <div className="text-xs text-slate-600 space-y-2 leading-relaxed">
                   <p>
-                    • <strong>Tự động lưu vĩnh viễn trên Cloud Server:</strong> Ứng dụng tích hợp máy chủ đám mây. Mỗi khi tạo tài khoản, thêm hộ chăn nuôi, hay nộp phiếu khảo sát, hệ thống sẽ <strong>tự động lưu ngay lập tức</strong> mà không cần người dùng phải bấm nút hay yêu cầu thủ công.
+                    • <strong>Lưu trữ vĩnh viễn trên Google Sheets (Không bị xóa):</strong> Ứng dụng kết nối trực tiếp với Google Sheets của bạn. Mỗi khi thêm giảng viên, học viên, hộ nuôi gà, hay ghi chép nhật ký, hệ thống sẽ <strong>tự động lưu ngay lập tức vào Google Sheets</strong>. Dữ liệu trên Google Sheets được lưu vĩnh viễn, tuyệt đối không bị xóa.
                   </p>
                   <p>
-                    • <strong>Đồng bộ ngầm lên Google Sheets (17 Sheet chuẩn):</strong> Sau mỗi thao tác cập nhật dữ liệu, ứng dụng sẽ tự động kích hoạt đẩy sang Google Sheets qua Google Apps Script Web App.
+                    • <strong>Đồng bộ 2 chiều tự động:</strong> Bạn có thể thêm sửa tài khoản trực tiếp trên ứng dụng hoặc trực tiếp trên Google Sheets. Bất kỳ tài khoản nào được tạo trên Google Sheets đều có thể đăng nhập ngay trên ứng dụng.
                   </p>
                   <p>
-                    • <strong>Không lo mất tài khoản khi đổi thiết bị:</strong> Khi bạn đăng nhập từ máy tính mới, điện thoại mới hoặc sau khi xóa cache trình duyệt, ứng dụng sẽ <strong>tự động tải lại 100% tài khoản và dữ liệu từ máy chủ đám mây</strong>.
+                    • <strong>Không lo mất dữ liệu khi đổi thiết bị:</strong> Khi bạn đăng nhập từ máy tính mới, điện thoại mới hoặc sau khi xóa cache trình duyệt, ứng dụng sẽ <strong>tự động tải lại 100% tài khoản và dữ liệu trực tiếp từ Google Sheets</strong>.
                   </p>
                 </div>
               </div>

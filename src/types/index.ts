@@ -22,9 +22,10 @@ export interface User {
   organization?: string; // Đơn vị công tác, cơ quan
   householdId?: string; // Nếu là hộ chăn nuôi thì liên kết với mã hộ (H01..H40)
   status: AccountStatus;
-  passwordHash: string;
-  salt: string;
-  plainPasswordHint?: string; // Mật khẩu khởi tạo hiển thị (mặc định 123456)
+  password?: string; // Mật khẩu trực tiếp
+  plainPasswordHint?: string; // Mật khẩu đăng nhập (mặc định 123456)
+  passwordHash?: string;
+  salt?: string;
   createdAt: string;
   lastLogin?: string;
 }

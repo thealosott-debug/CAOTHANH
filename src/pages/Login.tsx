@@ -26,7 +26,6 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { StorageService } from '../services/storage';
-import { CloudService } from '../services/cloudService';
 import { GoogleSheetsService } from '../services/googleSheets';
 import { generateSalt, hashPassword, verifyPassword } from '../utils/crypto';
 import { Role, User } from '../types';
@@ -168,8 +167,7 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess, onOpenCwmGuide }) 
       const cleanInput = username.trim().toLowerCase();
       const cleanPass = password.trim();
 
-      // 1. Luôn nạp dữ liệu mới nhất từ Cloud Server để nhận ngay tài khoản vừa được Admin tạo
-      await CloudService.loadFromCloud();
+      // 1. Lấy danh sách tài khoản hiện tại
       let users = StorageService.getUsers();
 
       // 2. Tra cứu tài khoản thông minh & linh hoạt (Username, Họ tên, SĐT, Mã hộ, Email)
@@ -203,27 +201,30 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess, onOpenCwmGuide }) 
       }
 
       let isValid = false;
+      const savedPass = (user.plainPasswordHint || user.password || '').trim();
 
-      // 1. Kiểm tra xác thực băm SHA-256 + Salt
-      if (user.passwordHash && user.salt) {
-        isValid = await verifyPassword(cleanPass, user.salt, user.passwordHash);
-      }
-
-      // 2. Kiểm tra nếu khớp với plainPasswordHint (hoặc mật khẩu trên Sheet)
-      if (!isValid && user.plainPasswordHint && user.plainPasswordHint.trim() === cleanPass) {
+      // 1. So khớp trực tiếp mật khẩu của tài khoản (nhập tay, file excel hoặc google sheet)
+      if (savedPass && cleanPass === savedPass) {
         isValid = true;
       }
 
-      // 3. CHÍNH SÁCH MẬT KHẨU MẶC ĐỊNH 123456:
-      // Mọi tài khoản mới được cấp (học viên hs01, hs02, người hướng dẫn ctthanh, hộ dân)
-      // đều đăng nhập thành công với mật khẩu mặc định 123456
+      // 2. Mật khẩu mặc định hệ thống 123456 luôn đúng cho mọi tài khoản
       if (!isValid && cleanPass === '123456') {
         isValid = true;
       }
 
-      // 4. Riêng tài khoản admin ban đầu có thể dùng cả admin123
-      if (!isValid && user.username.toLowerCase() === 'admin' && (cleanPass === 'admin123' || cleanPass === '123456')) {
+      // 3. Riêng tài khoản admin ban đầu có thể dùng cả admin123
+      if (!isValid && user.username.toLowerCase() === 'admin' && cleanPass === 'admin123') {
         isValid = true;
+      }
+
+      // 4. Nếu tài khoản có passwordHash từ trước, đối soát thêm để tương thích
+      if (!isValid && user.passwordHash && user.salt) {
+        try {
+          isValid = await verifyPassword(cleanPass, user.salt, user.passwordHash);
+        } catch {
+          // bỏ qua
+        }
       }
 
       if (!isValid) {
@@ -232,17 +233,11 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess, onOpenCwmGuide }) 
         return;
       }
 
-      // Tự động chuẩn hóa và lưu lại hash chuẩn cho tài khoản này nếu chưa có
-      if (!user.passwordHash || !user.salt || cleanPass === '123456') {
-        const salt = user.salt || generateSalt(16);
-        const hash = await hashPassword(cleanPass, salt);
-        user.passwordHash = hash;
-        user.salt = salt;
-        user.plainPasswordHint = cleanPass;
-        const allUsers = StorageService.getUsers().map((u) => (u.id === user.id ? user : u));
-        StorageService.saveUsers(allUsers);
-        CloudService.triggerAutoSave(50);
-      }
+      // Lưu lại mật khẩu trực tiếp, không dùng băm phức tạp
+      user.plainPasswordHint = cleanPass;
+      user.password = cleanPass;
+      const allUsers = StorageService.getUsers().map((u) => (u.id === user.id ? user : u));
+      StorageService.saveUsersDirectly(allUsers);
 
       // Đăng nhập thành công
       StorageService.setCurrentUser(user);
@@ -403,7 +398,7 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess, onOpenCwmGuide }) 
                 <div className="flex items-center justify-between text-xs pt-0.5">
                   <span className="text-slate-400 text-[11px] flex items-center space-x-1">
                     <Shield className="w-3 h-3 text-emerald-400" />
-                    <span>Mã hóa SHA-256 + Salt</span>
+                    <span>Mật khẩu trực tiếp • Tiện lợi &amp; Nhanh chóng</span>
                   </span>
                   <button
                     type="button"

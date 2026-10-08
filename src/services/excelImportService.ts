@@ -1,15 +1,29 @@
 /**
- * Dịch vụ xử lý xuất nhập dữ liệu Excel (XLSX, XLS, CSV)
- * Hỗ trợ: Hộ chăn nuôi, Người hướng dẫn, Người nghiên cứu
+ * Dịch vụ xuất nhập dữ liệu Excel (XLSX, XLS, CSV) cho Hệ thống Quản lý Chăn nuôi Gà
+ * Hỗ trợ nhận diện và nạp đầy đủ:
+ * 1. Cán bộ Hướng dẫn (hdan)
+ * 2. Giảng viên (gv) / Cán bộ nghiên cứu
+ * 3. Học sinh / Học viên / Sinh viên (hs) phụ trách
+ * 4. Hộ chăn nuôi gà (Hộ dân / hdan)
+ * 5. Toàn bộ danh sách tài khoản tổng hợp đa bảng tính (Multi-sheets)
+ * 
+ * Tự động phân tích thông minh:
+ * - Hỗ trợ tệp 1 sheet hoặc nhiều sheet (GIANG_VIEN, HOC_VIEN, HO_CHAN_NUOI, TAI_KHOAN...)
+ * - Tự động nhận diện dòng tiêu đề kể cả khi có dòng banner ở đầu
+ * - Tự động nhận diện dấu phân cách CSV (, hoặc ; hoặc tab)
+ * - Tự động đồng bộ 2 chiều: tạo User, tạo Household, tạo BC-01 và đẩy lên Google Sheets
  */
 
 import * as XLSX from 'xlsx';
 import { BC01Record, Household, Role, StudyGroup, User } from '../types';
 import { StorageService } from './storage';
-import { generateSalt, hashPassword } from '../utils/crypto';
+import { GoogleSheetsService } from './googleSheets';
+
+export type AccountCategory = 'SUPERVISOR' | 'RESEARCHER' | 'HOUSEHOLD' | 'ADMIN';
 
 export interface ParsedHouseholdRow {
   rowNumber: number;
+  sourceSheet?: string;
   id: string;
   representativeName: string;
   phone: string;
@@ -22,6 +36,7 @@ export interface ParsedHouseholdRow {
   group: StudyGroup;
   assignedResearcher: string;
   notes: string;
+  password?: string;
   isValid: boolean;
   errors: string[];
   warnings: string[];
@@ -29,33 +44,253 @@ export interface ParsedHouseholdRow {
 
 export interface ParsedUserRow {
   rowNumber: number;
+  sourceSheet?: string;
+  id?: string;
   username: string;
   fullName: string;
   role: Role;
+  roleTitle: string; // "Cán bộ hướng dẫn (HDAN)", "Giảng viên (GV)", "Học sinh / Học viên (HS)", "Hộ chăn nuôi gà", "Quản trị viên"
   title: string;
   organization: string;
   phone: string;
   email: string;
+  householdId?: string;
   password?: string;
+  // Các trường bổ sung nếu dòng này là Hộ chăn nuôi
+  address?: string;
+  livestockType?: string;
+  herdSize?: number;
+  farmingType?: string;
+  currentWasteMethod?: string;
+  group?: StudyGroup;
   isValid: boolean;
   errors: string[];
   warnings: string[];
 }
 
-// Hàm chuẩn hóa chuỗi để so khớp cột không phân biệt dấu và hoa thường
-function normalizeHeader(str: any): string {
-  if (!str) return '';
+export interface UnifiedParseResult {
+  sheetNames: string[];
+  totalRows: number;
+  users: ParsedUserRow[];
+  households: ParsedHouseholdRow[];
+  counts: {
+    supervisors: number; // GV + HDAN
+    researchers: number; // HS + Sinh viên
+    households: number;  // Hộ chăn nuôi gà
+    admins: number;
+    validCount: number;
+    errorCount: number;
+  };
+}
+
+/**
+ * Chuẩn hóa chuỗi so khớp cột: không dấu, chữ thường, bỏ khoảng trắng và ký tự đặc biệt
+ */
+export function normalizeHeader(str: any): string {
+  if (str === undefined || str === null) return '';
   return String(str)
     .trim()
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[đĐ]/g, 'd')
     .replace(/[^a-z0-9]/g, '');
+}
+
+/**
+ * Nhận diện vai trò linh hoạt & thông minh từ chuỗi tiếng Việt và ngữ cảnh dòng
+ */
+export function parseRoleString(
+  rawRole: string,
+  context?: {
+    username?: string;
+    fullName?: string;
+    hasFarmFields?: boolean;
+    hasAcademicFields?: boolean;
+    sheetName?: string;
+  }
+): { role: Role; roleTitle: string } {
+  const normRole = normalizeHeader(rawRole);
+  const normSheet = normalizeHeader(context?.sheetName || '');
+  const normUser = normalizeHeader(context?.username || '');
+
+  // 1. Dựa trên tên Sheet nếu Sheet chỉ rõ
+  if (normSheet.includes('giangvien') || normSheet === 'gv') {
+    return { role: 'SUPERVISOR', roleTitle: 'Giảng viên (GV)' };
+  }
+  if (normSheet.includes('huongdan') || normSheet === 'hdan') {
+    return { role: 'SUPERVISOR', roleTitle: 'Cán bộ hướng dẫn (HDAN)' };
+  }
+  if (normSheet.includes('hocvien') || normSheet.includes('hocsinh') || normSheet === 'hs' || normSheet === 'hv') {
+    return { role: 'RESEARCHER', roleTitle: 'Học sinh / Học viên (HS)' };
+  }
+  if (normSheet.includes('hochannuoi') || normSheet.includes('channuoi') || normSheet === 'ho') {
+    return { role: 'HOUSEHOLD', roleTitle: 'Hộ chăn nuôi gà' };
+  }
+
+  // 2. Dựa trên mã đăng nhập nếu có tiền tố rõ ràng
+  if (normUser.startsWith('gv') || normUser.startsWith('magv')) {
+    return { role: 'SUPERVISOR', roleTitle: 'Giảng viên (GV)' };
+  }
+  if (normUser.startsWith('hd') || normUser.startsWith('cbhd')) {
+    return { role: 'SUPERVISOR', roleTitle: 'Cán bộ hướng dẫn (HDAN)' };
+  }
+  if (normUser.startsWith('hs') || normUser.startsWith('hv') || normUser.startsWith('sv')) {
+    return { role: 'RESEARCHER', roleTitle: 'Học sinh / Học viên (HS)' };
+  }
+  if (/^h\d+$/.test(normUser)) {
+    return { role: 'HOUSEHOLD', roleTitle: 'Hộ chăn nuôi gà' };
+  }
+
+  // 3. Quản trị viên
+  if (
+    normRole === 'admin' ||
+    normRole.includes('quantri') ||
+    normRole.includes('chunhiem') ||
+    normRole.includes('truongnhom')
+  ) {
+    return { role: 'ADMIN', roleTitle: 'Quản trị viên (Chủ nhiệm đề tài)' };
+  }
+
+  // 4. Cán bộ Hướng dẫn (hdan)
+  if (
+    normRole === 'hdan' ||
+    normRole === 'cbhd' ||
+    normRole === 'gvhd' ||
+    normRole === 'hd' ||
+    normRole.includes('huongdan') ||
+    normRole.includes('covan') ||
+    normRole.includes('canbohuongdan') ||
+    normRole.includes('nguoihuongdan')
+  ) {
+    // Nếu dòng có các trường chăn nuôi đặc trưng (đàn gà, giống gà, địa chỉ thôn xã) thì có thể là Hộ dân viết tắt 'hdan'
+    if (context?.hasFarmFields && !context?.hasAcademicFields) {
+      return { role: 'HOUSEHOLD', roleTitle: 'Hộ chăn nuôi gà' };
+    }
+    return { role: 'SUPERVISOR', roleTitle: 'Cán bộ hướng dẫn (HDAN)' };
+  }
+
+  // 5. Giảng viên (gv)
+  if (
+    normRole === 'gv' ||
+    normRole.includes('giangvien') ||
+    normRole.includes('giaovien') ||
+    normRole.includes('thayco') ||
+    normRole.includes('supervisor')
+  ) {
+    return { role: 'SUPERVISOR', roleTitle: 'Giảng viên (GV)' };
+  }
+
+  // 6. Hộ chăn nuôi gà / Hộ dân
+  if (
+    normRole === 'ho' ||
+    normRole.includes('hodan') ||
+    normRole.includes('hochannuoi') ||
+    normRole.includes('channuoi') ||
+    normRole.includes('chuho') ||
+    normRole.includes('nongdan') ||
+    normRole.includes('household') ||
+    context?.hasFarmFields
+  ) {
+    return { role: 'HOUSEHOLD', roleTitle: 'Hộ chăn nuôi gà' };
+  }
+
+  // 7. Học sinh / Học viên / Sinh viên (hs)
+  if (
+    normRole === 'hs' ||
+    normRole === 'hv' ||
+    normRole === 'sv' ||
+    normRole === 'ncv' ||
+    normRole.includes('hocvien') ||
+    normRole.includes('hocsinh') ||
+    normRole.includes('sinhvien') ||
+    normRole.includes('nghiencuuvien') ||
+    normRole.includes('researcher')
+  ) {
+    return { role: 'RESEARCHER', roleTitle: 'Học sinh / Học viên (HS)' };
+  }
+
+  // Mặc định: Nếu có ngữ cảnh học hàm học vị -> Giảng viên; nếu không -> Học viên
+  if (context?.hasAcademicFields) {
+    return { role: 'SUPERVISOR', roleTitle: 'Giảng viên (GV)' };
+  }
+  return { role: 'RESEARCHER', roleTitle: 'Học sinh / Học viên (HS)' };
+}
+
+/**
+ * Tìm dòng tiêu đề tốt nhất trong 15 dòng đầu
+ */
+function findBestHeaderRow(rawData: any[][], expectedKeywordsList: string[][]): { headerRowIndex: number; headerRow: string[] } {
+  let bestRowIdx = 0;
+  let maxScore = -1;
+
+  for (let i = 0; i < Math.min(rawData.length, 15); i++) {
+    const row = rawData[i];
+    if (!row || !Array.isArray(row)) continue;
+    const normalizedCells = row.map(normalizeHeader);
+
+    let score = 0;
+    for (const keywords of expectedKeywordsList) {
+      const matched = normalizedCells.some((cell) =>
+        keywords.some((k) => cell === k || (k.length >= 3 && cell.includes(k)))
+      );
+      if (matched) score++;
+    }
+
+    if (score > maxScore) {
+      maxScore = score;
+      bestRowIdx = i;
+    }
+  }
+
+  const bestRow = (rawData[bestRowIdx] || []).map(normalizeHeader);
+  return { headerRowIndex: bestRowIdx, headerRow: bestRow };
+}
+
+/**
+ * Tìm vị trí cột dựa trên danh sách từ khóa ưu tiên
+ */
+function findColIdx(headerRow: string[], keywords: string[]): number {
+  return headerRow.findIndex((h) =>
+    keywords.some((k) => {
+      if (!h) return false;
+      if (h === k) return true;
+      // Tránh việc từ ngắn khớp bừa bãi (như 'ma' khớp với 'channuoi' nếu không cẩn thận)
+      if (k.length >= 3 && h.includes(k)) return true;
+      if (k.length < 3 && (h === k || h.startsWith(k + '_') || h.startsWith(k + 'so') || h.endsWith('_' + k))) return true;
+      return false;
+    })
+  );
+}
+
+/**
+ * Tách dòng CSV hỗ trợ cả dấu phẩy, chấm phẩy, tab
+ */
+function parseCsvToMatrix(csvText: string): any[][] {
+  // Xác định dấu phân cách phổ biến nhất ở dòng đầu tiên
+  const firstLine = csvText.split('\n')[0] || '';
+  let delimiter = ',';
+  const commaCount = (firstLine.match(/,/g) || []).length;
+  const semiCount = (firstLine.match(/;/g) || []).length;
+  const tabCount = (firstLine.match(/\t/g) || []).length;
+
+  if (semiCount > commaCount && semiCount > tabCount) delimiter = ';';
+  else if (tabCount > commaCount && tabCount > semiCount) delimiter = '\t';
+
+  const rows: any[][] = [];
+  const lines = csvText.split(/\r?\n/);
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    // Tách cột đơn giản có hỗ trợ trích xuất ngoặc kép
+    const parts = line.split(delimiter).map(cell => cell.replace(/^"(.*)"$/, '$1').trim());
+    rows.push(parts);
+  }
+  return rows;
 }
 
 export class ExcelImportService {
   /**
-   * Tải tệp mẫu Excel cho Hộ chăn nuôi
+   * Tải tệp mẫu Excel cho Hộ chăn nuôi gà (hdan)
    */
   static downloadHouseholdTemplate(): void {
     const wb = XLSX.utils.book_new();
@@ -63,15 +298,16 @@ export class ExcelImportService {
     const headers = [
       'Mã hộ (*)',
       'Họ và tên chủ hộ (*)',
-      'Số điện thoại (*)',
-      'Địa chỉ (Thôn/Xã/Huyện) (*)',
-      'Loại vật nuôi',
+      'Số điện thoại',
+      'Địa chỉ (Thôn/Xã/Huyện)',
+      'Giống gà nuôi',
       'Quy mô đàn (con)',
       'Số năm chăn nuôi',
-      'Hình thức chăn nuôi',
+      'Hình thức nuôi',
       'Xử lý chất thải hiện tại',
-      'Nhóm nghiên cứu (TN hoặc ĐC) (*)',
-      'Người nghiên cứu phụ trách',
+      'Nhóm nghiên cứu (TN hoặc ĐC)',
+      'Học viên phụ trách',
+      'Mật khẩu đăng nhập',
       'Ghi chú'
     ];
 
@@ -81,70 +317,62 @@ export class ExcelImportService {
         'H01',
         'Nguyễn Văn A',
         '0912345678',
-        'Thôn 1, Xã Tân Lập, Huyện Yên Định, Thanh Hóa',
-        'Lợn thịt',
-        60,
-        5,
-        'Gia trại chuồng hở',
-        'Hầm Biogas composite',
+        'Thôn 1, Xã Tân Lập, Huyện Yên Định',
+        'Gà ri lai thả vườn',
+        500,
+        4,
+        'Bán chăn thả có đệm lót sinh học',
+        'Đệm lót sinh học Balasa N01',
         'TN',
-        'ThS. Trần Thị Mai',
-        'Hộ chăn nuôi tiêu biểu xã Tân Lập'
+        'Lê Văn C',
+        '123456',
+        'Hộ chăn nuôi gà tiêu biểu xã Tân Lập'
       ],
       [
         'H02',
         'Trần Thị B',
         '0987654321',
-        'Thôn 2, Xã Tân Lập, Huyện Yên Định, Thanh Hóa',
-        'Lợn thịt',
-        45,
-        4,
-        'Gia trại chuồng hở',
-        'Hầm Biogas',
+        'Thôn 2, Xã Tân Lập, Huyện Yên Định',
+        'Gà Mía thả vườn',
+        300,
+        3,
+        'Bán chăn thả có đệm lót sinh học',
+        'Ủ phân compost hoai mục',
         'TN',
-        'ThS. Trần Thị Mai',
-        ''
+        'Lê Văn C',
+        '123456',
+        'Đang vào đàn tuần thứ 2'
       ],
       [
         'H03',
         'Lê Văn C',
         '0905123456',
-        'Thôn 3, Xã Định Long, Huyện Yên Định, Thanh Hóa',
-        'Bò thịt',
-        15,
-        7,
-        'Bán chăn thả',
-        'Ủ phân compost',
+        'Thôn 3, Xã Định Long, Huyện Yên Định',
+        'Gà Lạc Thủy',
+        400,
+        5,
+        'Bán chăn thả chuồng hở',
+        'Đệm lót sinh học Balasa N01',
         'ĐC',
-        'KS. Lê Hoàng Long',
+        'Phạm Thị D',
+        '123456',
         'Hộ thuộc nhóm đối chứng'
       ]
     ];
 
     const ws = XLSX.utils.aoa_to_sheet(sampleData);
-
-    // Căn chỉnh độ rộng cột
     ws['!cols'] = [
-      { wch: 12 }, // Mã hộ
-      { wch: 24 }, // Tên chủ hộ
-      { wch: 16 }, // SĐT
-      { wch: 42 }, // Địa chỉ
-      { wch: 16 }, // Vật nuôi
-      { wch: 18 }, // Quy mô
-      { wch: 18 }, // Số năm
-      { wch: 22 }, // Hình thức
-      { wch: 24 }, // Xử lý chất thải
-      { wch: 30 }, // Nhóm
-      { wch: 26 }, // NCV phụ trách
-      { wch: 30 }, // Ghi chú
+      { wch: 12 }, { wch: 24 }, { wch: 16 }, { wch: 38 },
+      { wch: 22 }, { wch: 18 }, { wch: 16 }, { wch: 30 },
+      { wch: 28 }, { wch: 28 }, { wch: 22 }, { wch: 20 }, { wch: 30 }
     ];
 
     XLSX.utils.book_append_sheet(wb, ws, 'HO_CHAN_NUOI');
-    XLSX.writeFile(wb, 'Mau_Nhap_Ho_Chan_Nuoi_GreenFarm.xlsx');
+    XLSX.writeFile(wb, 'Mau_Nhap_Ho_Chan_Nuoi_Ga.xlsx');
   }
 
   /**
-   * Tải tệp mẫu Excel cho Người hướng dẫn & Người nghiên cứu
+   * Tải tệp mẫu Excel cho Giảng viên (gv) & Cán bộ Hướng dẫn (hdan) & Học sinh (hs)
    */
   static downloadResearchTeamTemplate(): void {
     const wb = XLSX.utils.book_new();
@@ -152,116 +380,386 @@ export class ExcelImportService {
     const headers = [
       'Tên đăng nhập (*)',
       'Họ và tên (*)',
-      'Vai trò (*)',
+      'Vai trò (HDAN / GV / HS) (*)',
       'Học hàm / Học vị / Chức vụ',
-      'Đơn vị công tác',
+      'Đơn vị công tác / Lớp',
       'Số điện thoại',
       'Email',
-      'Mật khẩu khởi tạo'
+      'Mật khẩu đăng nhập'
     ];
 
     const sampleData = [
       headers,
       [
-        'huongdan_01',
+        'hd_mai',
+        'TS. Hoàng Thị Mai',
+        'Cán bộ hướng dẫn (HDAN)',
+        'Cố vấn khoa học thực địa',
+        'Chi cục Chăn nuôi & Thú y',
+        '0912333444',
+        'htmai@chicucthuy.gov.vn',
+        '123456'
+      ],
+      [
+        'gv_tuan',
         'PGS.TS. Nguyễn Văn Tuấn',
-        'Người hướng dẫn',
-        'Cố vấn khoa học cấp cao',
-        'Trường Đại học Khoa học',
+        'Giảng viên (GV)',
+        'Giảng viên cao cấp',
+        'Khoa Chăn nuôi Thú y',
         '0912111222',
         'nvtuan@univ.edu.vn',
         '123456'
       ],
       [
-        'nghiencuu_mai',
-        'ThS. Trần Thị Mai',
-        'Nghiên cứu viên',
-        'Thạc sĩ Nông nghiệp - Cán bộ khảo sát thực địa',
-        'Viện Nghiên cứu Môi trường',
+        'hs01',
+        'Lê Văn C',
+        'Học sinh / Học viên (HS)',
+        'Sinh viên thực tập tốt nghiệp',
+        'Lớp Thú y K65',
         '0988222333',
-        'ttmai@research.vn',
+        'hs01@univ.edu.vn',
         '123456'
       ],
       [
-        'nghiencuu_long',
-        'KS. Lê Hoàng Long',
-        'Nghiên cứu viên',
-        'Kỹ sư Chăn nuôi Thú y',
-        'Trung tâm Khuyến nông',
+        'hs02',
+        'Phạm Thị D',
+        'Học sinh / Học viên (HS)',
+        'Sinh viên thực tập tốt nghiệp',
+        'Lớp Chăn nuôi K66',
         '0977333444',
-        'lhlong@research.vn',
+        'hs02@univ.edu.vn',
         '123456'
       ]
     ];
 
     const ws = XLSX.utils.aoa_to_sheet(sampleData);
-
     ws['!cols'] = [
-      { wch: 18 }, // Username
-      { wch: 26 }, // Họ tên
-      { wch: 20 }, // Vai trò
-      { wch: 36 }, // Học hàm học vị
-      { wch: 32 }, // Đơn vị công tác
-      { wch: 16 }, // SĐT
-      { wch: 26 }, // Email
-      { wch: 20 }, // Mật khẩu
+      { wch: 18 }, { wch: 26 }, { wch: 28 }, { wch: 32 },
+      { wch: 28 }, { wch: 16 }, { wch: 26 }, { wch: 20 }
     ];
 
-    XLSX.utils.book_append_sheet(wb, ws, 'NGUOI_NGHIEN_CUU');
-    XLSX.writeFile(wb, 'Mau_Nhap_Nguoi_Huong_Dan_Va_Nghien_Cuu.xlsx');
+    XLSX.utils.book_append_sheet(wb, ws, 'CAN_BO_VA_HOC_VIEN');
+    XLSX.writeFile(wb, 'Mau_Nhap_Can_Bo_Va_Hoc_Vien.xlsx');
   }
 
   /**
-   * Tải tệp mẫu tổng hợp cả 2 danh sách trong cùng 1 file Excel (2 Sheets)
+   * Tải tệp mẫu Excel tổng hợp toàn bộ tài khoản (HDAN, GV, HS, Hộ chăn nuôi, Quản trị)
    */
   static downloadCombinedTemplate(): void {
     const wb = XLSX.utils.book_new();
 
-    // Sheet 1: Hộ chăn nuôi
+    // Sheet 1: Hộ chăn nuôi gà
     const ws1 = XLSX.utils.aoa_to_sheet([
       [
-        'Mã hộ (*)',
-        'Họ và tên chủ hộ (*)',
-        'Số điện thoại (*)',
-        'Địa chỉ (Thôn/Xã/Huyện) (*)',
-        'Loại vật nuôi',
-        'Quy mô đàn (con)',
-        'Số năm chăn nuôi',
-        'Hình thức chăn nuôi',
-        'Xử lý chất thải hiện tại',
-        'Nhóm nghiên cứu (TN hoặc ĐC) (*)',
-        'Người nghiên cứu phụ trách',
-        'Ghi chú'
+        'Mã hộ (*)', 'Tên chủ hộ (*)', 'Số điện thoại', 'Địa chỉ', 'Giống gà',
+        'Quy mô (con)', 'Hình thức nuôi', 'Xử lý chất thải', 'Nhóm (TN/ĐC)', 'Học viên phụ trách', 'Mật khẩu'
       ],
-      ['H01', 'Nguyễn Văn A', '0912345678', 'Xã Tân Lập, Huyện Yên Định, Thanh Hóa', 'Lợn thịt', 50, 4, 'Gia trại chuồng hở', 'Hầm Biogas', 'TN', 'ThS. Trần Thị Mai', ''],
-      ['H02', 'Trần Văn B', '0987654321', 'Xã Tân Lập, Huyện Yên Định, Thanh Hóa', 'Lợn thịt', 40, 5, 'Gia trại chuồng hở', 'Hầm Biogas', 'ĐC', 'KS. Lê Hoàng Long', '']
+      ['H01', 'Nguyễn Văn A', '0912345678', 'Xã Tân Lập, Huyện Yên Định', 'Gà ri thả vườn', 500, 'Bán chăn thả có đệm lót', 'Đệm lót Balasa N01', 'TN', 'hs01', '123456'],
+      ['H02', 'Trần Thị B', '0987654321', 'Xã Tân Lập, Huyện Yên Định', 'Gà Mía', 400, 'Bán chăn thả có đệm lót', 'Đệm lót Balasa N01', 'TN', 'hs01', '123456'],
+      ['H03', 'Lê Văn C', '0905123456', 'Xã Định Long, Huyện Yên Định', 'Gà Lạc Thủy', 350, 'Chuồng hở', 'Ủ phân compost', 'ĐC', 'hs02', '123456'],
     ]);
-    ws1['!cols'] = [{ wch: 12 }, { wch: 22 }, { wch: 15 }, { wch: 38 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 20 }, { wch: 20 }, { wch: 25 }, { wch: 24 }, { wch: 20 }];
     XLSX.utils.book_append_sheet(wb, ws1, 'HO_CHAN_NUOI');
 
-    // Sheet 2: Cán bộ
+    // Sheet 2: Danh sách tài khoản đầy đủ
     const ws2 = XLSX.utils.aoa_to_sheet([
-      [
-        'Tên đăng nhập (*)',
-        'Họ và tên (*)',
-        'Vai trò (*)',
-        'Học hàm / Học vị / Chức vụ',
-        'Đơn vị công tác',
-        'Số điện thoại',
-        'Email',
-        'Mật khẩu khởi tạo'
-      ],
-      ['huongdan_01', 'PGS.TS. Nguyễn Văn Tuấn', 'Người hướng dẫn', 'Cố vấn chuyên môn', 'Đại học Quốc Gia', '0912345678', 'tuan@edu.vn', '123456'],
-      ['nghiencuu_mai', 'ThS. Trần Thị Mai', 'Nghiên cứu viên', 'Khảo sát viên chính', 'Viện Môi trường', '0988776655', 'mai@research.vn', '123456']
+      ['Tên đăng nhập (*)', 'Họ và tên (*)', 'Vai trò (HDAN / GV / HS / Hộ chăn nuôi / Quản trị) (*)', 'Mã hộ (nếu là hộ)', 'SĐT', 'Email', 'Đơn vị / Địa chỉ', 'Mật khẩu'],
+      ['admin', 'Quản trị viên (Chủ nhiệm đề tài)', 'Quản trị viên', '', '0912345678', 'admin@univ.edu.vn', 'Khoa Chăn nuôi', '123456'],
+      ['hd_mai', 'TS. Hoàng Thị Mai', 'Cán bộ hướng dẫn (HDAN)', '', '0912333444', 'htmai@gov.vn', 'Chi cục Thú y', '123456'],
+      ['gv_tuan', 'PGS.TS. Nguyễn Văn Tuấn', 'Giảng viên (GV)', '', '0912111222', 'tuan@univ.edu.vn', 'Khoa Chăn nuôi', '123456'],
+      ['hs01', 'Lê Văn C', 'Học sinh / Học viên (HS)', '', '0988222333', 'hs01@univ.edu.vn', 'Lớp Thú y K65', '123456'],
+      ['hs02', 'Phạm Thị D', 'Học sinh / Học viên (HS)', '', '0977333444', 'hs02@univ.edu.vn', 'Lớp Chăn nuôi K66', '123456'],
+      ['h01', 'Nguyễn Văn A', 'Hộ chăn nuôi gà', 'H01', '0912345678', '', 'Thôn 1, Xã Tân Lập', '123456'],
+      ['h02', 'Trần Thị B', 'Hộ chăn nuôi gà', 'H02', '0987654321', '', 'Thôn 2, Xã Tân Lập', '123456'],
+      ['h03', 'Lê Văn C', 'Hộ chăn nuôi gà', 'H03', '0905123456', '', 'Thôn 3, Xã Định Long', '123456'],
     ]);
-    ws2['!cols'] = [{ wch: 18 }, { wch: 25 }, { wch: 20 }, { wch: 30 }, { wch: 28 }, { wch: 15 }, { wch: 24 }, { wch: 18 }];
-    XLSX.utils.book_append_sheet(wb, ws2, 'NGUOI_HUONG_DAN_VA_NCV');
+    XLSX.utils.book_append_sheet(wb, ws2, 'TAI_KHOAN');
 
-    XLSX.writeFile(wb, 'Mau_Tong_Hop_Nghien_Cuu_GreenFarm.xlsx');
+    XLSX.writeFile(wb, 'Mau_Tong_Hop_Tai_Khoan_GreenFarm.xlsx');
   }
 
   /**
-   * Đọc và phân tích file Excel / CSV nhập Hộ chăn nuôi
+   * Phân tích tệp thông minh: Quét TẤT CẢ các bảng tính (Sheets) trong tệp Excel hoặc CSV
+   * Tự động gom nhóm toàn bộ: Cán bộ hướng dẫn (hdan), Giảng viên (gv), Học sinh (hs), Hộ chăn nuôi
+   */
+  static async parseUniversalFile(file: File): Promise<UnifiedParseResult> {
+    const buffer = await file.arrayBuffer();
+    let wb: XLSX.WorkBook;
+
+    try {
+      wb = XLSX.read(buffer, { type: 'array' });
+    } catch {
+      // Thử đọc dạng chuỗi văn bản nếu là CSV
+      const textDecoder = new TextDecoder('utf-8');
+      const csvStr = textDecoder.decode(buffer);
+      const matrix = parseCsvToMatrix(csvStr);
+      const ws = XLSX.utils.aoa_to_sheet(matrix);
+      wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'CSV_DATA');
+    }
+
+    if (!wb.SheetNames || wb.SheetNames.length === 0) {
+      throw new Error('Tệp không chứa bất kỳ bảng dữ liệu nào.');
+    }
+
+    const allUsers: ParsedUserRow[] = [];
+    const allHouseholds: ParsedHouseholdRow[] = [];
+    const seenUsernames = new Set<string>();
+    const seenHouseholdIds = new Set<string>();
+
+    for (const sheetName of wb.SheetNames) {
+      const ws = wb.Sheets[sheetName];
+      if (!ws) continue;
+
+      let rawData: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+      if (!rawData || rawData.length === 0) continue;
+
+      // Làm sạch các dòng rỗng
+      rawData = rawData.filter(r => Array.isArray(r) && r.some(c => String(c).trim() !== ''));
+      if (rawData.length < 2) continue;
+
+      const normSheet = normalizeHeader(sheetName);
+
+      // Quyết định hướng phân tích chính của sheet:
+      // A. Sheet chuyên về Hộ chăn nuôi
+      const isPureHouseholdSheet =
+        normSheet.includes('hochannuoi') ||
+        normSheet === 'ho' ||
+        normSheet.includes('channuoi') ||
+        normSheet.includes('danhmucho');
+
+      // B. Sheet chuyên về Cán bộ / Giảng viên / Học viên
+      const isPureTeamSheet =
+        normSheet.includes('giangvien') ||
+        normSheet.includes('hocvien') ||
+        normSheet.includes('canbo') ||
+        normSheet === 'gv' ||
+        normSheet === 'hs';
+
+      // Định vị dòng tiêu đề
+      const expectedKeywords = [
+        ['tendangnhap', 'username', 'taikhoan', 'user', 'ma', 'magv', 'mahv', 'maho', 'id'],
+        ['hovaten', 'hoten', 'ten', 'fullname', 'daidien', 'tenchuho', 'chuho'],
+        ['vaitro', 'role', 'chucdanh', 'loaitaikhoan', 'doituong'],
+        ['sodienthoai', 'dienthoai', 'sdt', 'phone', 'tel'],
+        ['diachi', 'donvi', 'bomon', 'khoa', 'lop', 'organization', 'address']
+      ];
+
+      const { headerRowIndex, headerRow } = findBestHeaderRow(rawData, expectedKeywords);
+
+      // Xác định chỉ số cột cực kỳ mềm dẻo
+      const colUsername = findColIdx(headerRow, [
+        'tendangnhap', 'username', 'taikhoan', 'user', 'mataikhoan',
+        'magv', 'mahv', 'masv', 'mahs', 'maho', 'id', 'madinhdanh', 'ma'
+      ]);
+      const colName = findColIdx(headerRow, [
+        'hovaten', 'hoten', 'ten', 'fullname', 'daidien', 'tenchuho', 'chuho',
+        'nguoidaidien', 'chuhonongdan', 'tengv', 'tenhv', 'tenhs'
+      ]);
+      const colRole = findColIdx(headerRow, [
+        'vaitro', 'role', 'chucdanh', 'chucvu', 'loaitaikhoan', 'loai', 'nhom', 'doituong', 'phanloai'
+      ]);
+      const colTitle = findColIdx(headerRow, ['hocham', 'hocvi', 'chucdanh', 'chucvu', 'title']);
+      const colOrg = findColIdx(headerRow, ['donvi', 'bomon', 'khoa', 'lop', 'coquan', 'truong', 'organization']);
+      const colPhone = findColIdx(headerRow, ['sodienthoai', 'dienthoai', 'sdt', 'phone', 'tel', 'didong']);
+      const colEmail = findColIdx(headerRow, ['email', 'mail', 'thu']);
+      const colHouseholdId = findColIdx(headerRow, ['maho', 'householdid', 'ho', 'mahochan nuoi', 'soho']);
+      const colAddress = findColIdx(headerRow, ['diachi', 'thon', 'xa', 'huyen', 'address']);
+      const colLivestock = findColIdx(headerRow, ['giongga', 'giong', 'loaivatnuoi', 'vatnuoi', 'loai']);
+      const colHerdSize = findColIdx(headerRow, ['quymodan', 'quymo', 'soluong', 'dan', 'con', 'soga']);
+      const colFarmingYears = findColIdx(headerRow, ['sonamchannuoi', 'sonam', 'kinhnghiem', 'nam']);
+      const colFarmingType = findColIdx(headerRow, ['hinhthuc', 'chuong', 'hinhthucnuoi']);
+      const colWasteMethod = findColIdx(headerRow, ['xulychatthai', 'chatthai', 'demlot', 'biogas', 'phuongphap']);
+      const colGroup = findColIdx(headerRow, ['nhomnghiencuu', 'nhom', 'group']);
+      const colResearcher = findColIdx(headerRow, ['hocvien', 'nguoinghiencuu', 'nghiencuuvien', 'phutrach', 'canbo', 'sinhvien']);
+      const colPassword = findColIdx(headerRow, ['matkhau', 'password', 'pass', 'mk']);
+      const colNotes = findColIdx(headerRow, ['ghichu', 'note', 'notes']);
+
+      for (let i = headerRowIndex + 1; i < rawData.length; i++) {
+        const r = rawData[i];
+        if (!r || r.every((cell: any) => String(cell).trim() === '')) continue;
+
+        const errors: string[] = [];
+        const warnings: string[] = [];
+
+        // 1. Họ và tên
+        let fullName = colName >= 0 ? String(r[colName] || '').trim() : '';
+        if (!fullName && colUsername >= 0 && colRole >= 0) {
+          fullName = String(r[colUsername] || '').trim();
+        }
+        if (!fullName) {
+          errors.push('Thiếu họ và tên.');
+        }
+
+        // 2. Kiểm tra xem dòng này có các trường nông trại không
+        const rawLivestock = colLivestock >= 0 ? String(r[colLivestock] || '').trim() : '';
+        const rawHerd = colHerdSize >= 0 ? Number(r[colHerdSize]) : NaN;
+        const hasFarmFields = isPureHouseholdSheet || Boolean(rawLivestock) || !isNaN(rawHerd) || colAddress >= 0;
+        const hasAcademicFields = Boolean(colTitle >= 0 && r[colTitle]) || Boolean(colOrg >= 0 && r[colOrg]);
+
+        // 3. Nhận diện vai trò
+        const rawRole = colRole >= 0 ? String(r[colRole] || '').trim() : '';
+        const rawUserCandidate = colUsername >= 0 ? String(r[colUsername] || '').trim() : '';
+        const { role, roleTitle } = parseRoleString(rawRole, {
+          username: rawUserCandidate,
+          fullName,
+          hasFarmFields,
+          hasAcademicFields,
+          sheetName,
+        });
+
+        // 4. Tên đăng nhập
+        let username = rawUserCandidate.toLowerCase();
+        if (!username) {
+          if (role === 'HOUSEHOLD') {
+            const rawHid = colHouseholdId >= 0 ? String(r[colHouseholdId] || '').trim().toLowerCase() : '';
+            if (rawHid) {
+              username = rawHid;
+            } else {
+              const nextHNum = allHouseholds.length + 1;
+              username = `h${nextHNum.toString().padStart(2, '0')}`;
+              warnings.push(`Chưa có mã hộ, tự sinh tên đăng nhập: ${username}`);
+            }
+          } else if (fullName) {
+            const cleanName = normalizeHeader(fullName);
+            const prefix = role === 'SUPERVISOR' ? 'gv_' : 'hs_';
+            username = `${prefix}${cleanName.slice(0, 10)}${allUsers.length + 1}`;
+            warnings.push(`Chưa có tên đăng nhập, tự tạo: ${username}`);
+          } else {
+            username = `usr_${Date.now()}_${allUsers.length + 1}`;
+            errors.push('Thiếu tên đăng nhập.');
+          }
+        }
+
+        // Kiểm tra trùng username trong cùng tệp
+        if (seenUsernames.has(username)) {
+          // Tự thêm hậu tố số để không bị chặn
+          const altUsername = `${username}_${allUsers.length + 1}`;
+          warnings.push(`Tên đăng nhập "${username}" bị trùng lặp trong tệp, đã đổi thành: ${altUsername}`);
+          username = altUsername;
+        }
+        seenUsernames.add(username);
+
+        // 5. Số điện thoại & Email
+        const phone = colPhone >= 0 ? String(r[colPhone] || '').trim().replace(/[^0-9+]/g, '') : '';
+        const email = colEmail >= 0 ? String(r[colEmail] || '').trim() : '';
+
+        // 6. Địa chỉ / Đơn vị
+        const address = colAddress >= 0 && r[colAddress]
+          ? String(r[colAddress]).trim()
+          : (colOrg >= 0 && r[colOrg] ? String(r[colOrg]).trim() : 'Khu vực chăn nuôi gà');
+        const organization = colOrg >= 0 && r[colOrg]
+          ? String(r[colOrg]).trim()
+          : (role === 'SUPERVISOR' ? 'Khoa Chăn nuôi Thú y' : (role === 'RESEARCHER' ? 'Lớp Thú y K65' : address));
+
+        // 7. Học hàm / chức vụ
+        const title = colTitle >= 0 && r[colTitle]
+          ? String(r[colTitle]).trim()
+          : (role === 'SUPERVISOR' ? 'Cán bộ hướng dẫn / Giảng viên' : (role === 'RESEARCHER' ? 'Học viên phụ trách' : 'Chủ hộ'));
+
+        // 8. Mật khẩu ban đầu
+        const password = colPassword >= 0 && String(r[colPassword] || '').trim()
+          ? String(r[colPassword] || '').trim()
+          : '123456';
+
+        // 9. Mã hộ liên kết
+        let householdId: string | undefined = undefined;
+        if (role === 'HOUSEHOLD') {
+          const rawHid = colHouseholdId >= 0 ? String(r[colHouseholdId] || '').trim().toUpperCase() : '';
+          householdId = rawHid || username.toUpperCase();
+        }
+
+        const isValid = errors.length === 0;
+
+        // Lưu vào danh sách User
+        const parsedUser: ParsedUserRow = {
+          rowNumber: i + 1,
+          sourceSheet: sheetName,
+          username,
+          fullName,
+          role,
+          roleTitle,
+          title,
+          organization,
+          phone,
+          email,
+          householdId,
+          password,
+          address,
+          livestockType: rawLivestock || 'Gà ri lai thả vườn',
+          herdSize: !isNaN(rawHerd) && rawHerd > 0 ? rawHerd : 500,
+          farmingType: colFarmingType >= 0 && r[colFarmingType] ? String(r[colFarmingType]).trim() : 'Bán chăn thả có đệm lót sinh học',
+          currentWasteMethod: colWasteMethod >= 0 && r[colWasteMethod] ? String(r[colWasteMethod]).trim() : 'Đệm lót sinh học Balasa N01',
+          group: (colGroup >= 0 && normalizeHeader(r[colGroup]).includes('dc')) ? 'DC' : 'TN',
+          isValid,
+          errors,
+          warnings,
+        };
+        allUsers.push(parsedUser);
+
+        // Nếu dòng này là Hộ chăn nuôi (hoặc nằm trong sheet hộ chăn nuôi), tạo đồng thời bản ghi Hộ chăn nuôi
+        if (role === 'HOUSEHOLD' || isPureHouseholdSheet) {
+          const hid = householdId || username.toUpperCase();
+          if (!seenHouseholdIds.has(hid)) {
+            seenHouseholdIds.add(hid);
+
+            let group: StudyGroup = 'TN';
+            if (colGroup >= 0) {
+              const normG = normalizeHeader(r[colGroup]);
+              if (normG.includes('dc') || normG.includes('doi') || normG.includes('control')) {
+                group = 'DC';
+              }
+            } else if (allHouseholds.length >= 20) {
+              group = 'DC';
+            }
+
+            const rawYears = colFarmingYears >= 0 ? Number(r[colFarmingYears]) : 3;
+
+            allHouseholds.push({
+              rowNumber: i + 1,
+              sourceSheet: sheetName,
+              id: hid,
+              representativeName: fullName,
+              phone,
+              address,
+              livestockType: parsedUser.livestockType || 'Gà ri lai thả vườn',
+              herdSize: parsedUser.herdSize || 500,
+              farmingYears: !isNaN(rawYears) && rawYears >= 0 ? rawYears : 3,
+              farmingType: parsedUser.farmingType || 'Bán chăn thả có đệm lót sinh học',
+              currentWasteMethod: parsedUser.currentWasteMethod || 'Đệm lót sinh học Balasa N01',
+              group,
+              assignedResearcher: colResearcher >= 0 && r[colResearcher] ? String(r[colResearcher]).trim() : 'Chưa phân công',
+              notes: colNotes >= 0 && r[colNotes] ? String(r[colNotes]).trim() : 'Nhập từ tệp dữ liệu',
+              password,
+              isValid,
+              errors,
+              warnings,
+            });
+          }
+        }
+      }
+    }
+
+    const validUsersCount = allUsers.filter(u => u.isValid).length;
+    const errorUsersCount = allUsers.length - validUsersCount;
+
+    return {
+      sheetNames: wb.SheetNames,
+      totalRows: allUsers.length,
+      users: allUsers,
+      households: allHouseholds,
+      counts: {
+        supervisors: allUsers.filter(u => u.role === 'SUPERVISOR').length,
+        researchers: allUsers.filter(u => u.role === 'RESEARCHER').length,
+        households: allUsers.filter(u => u.role === 'HOUSEHOLD').length,
+        admins: allUsers.filter(u => u.role === 'ADMIN').length,
+        validCount: validUsersCount,
+        errorCount: errorUsersCount,
+      }
+    };
+  }
+
+  /**
+   * Tương thích ngược: Đọc và phân tích file Hộ chăn nuôi
    */
   static async parseHouseholdsFile(file: File): Promise<{
     sheetName: string;
@@ -269,166 +767,17 @@ export class ExcelImportService {
     validCount: number;
     errorCount: number;
   }> {
-    const buffer = await file.arrayBuffer();
-    const wb = XLSX.read(buffer, { type: 'array' });
-
-    // Ưu tiên sheet có tên chứa "HO" hoặc sheet đầu tiên
-    let sheetName = wb.SheetNames[0];
-    const foundHoSheet = wb.SheetNames.find(s => normalizeHeader(s).includes('ho'));
-    if (foundHoSheet) sheetName = foundHoSheet;
-
-    const ws = wb.Sheets[sheetName];
-    if (!ws) {
-      throw new Error('Không tìm thấy dữ liệu trong tệp Excel.');
-    }
-
-    const rawData: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
-    if (rawData.length < 2) {
-      throw new Error('Tệp Excel không có đủ dữ liệu (ít nhất cần 1 dòng tiêu đề và 1 dòng dữ liệu).');
-    }
-
-    // Tìm dòng tiêu đề (Header row)
-    let headerRowIndex = 0;
-    for (let i = 0; i < Math.min(rawData.length, 5); i++) {
-      const rowStr = rawData[i].map(normalizeHeader).join(' ');
-      if (rowStr.includes('ma') || rowStr.includes('ten') || rowStr.includes('ho')) {
-        headerRowIndex = i;
-        break;
-      }
-    }
-
-    const headerRow = rawData[headerRowIndex].map(normalizeHeader);
-
-    // Tìm vị trí các cột
-    const findCol = (keywords: string[]) => {
-      return headerRow.findIndex(h => keywords.some(k => h.includes(k)));
-    };
-
-    const colId = findCol(['maho', 'id', 'ma']);
-    const colName = findCol(['tenchuho', 'hoten', 'chuho', 'daidien', 'ten']);
-    const colPhone = findCol(['sodienthoai', 'dienthoai', 'sdt', 'phone']);
-    const colAddress = findCol(['diachi', 'thon', 'xa', 'address']);
-    const colLivestock = findCol(['loaivatnuoi', 'vatnuoi', 'loai', 'dan']);
-    const colHerdSize = findCol(['quymodan', 'soluong', 'quymo', 'con']);
-    const colFarmingYears = findCol(['sonamchannuoi', 'sonam', 'kinhnghiem', 'nam']);
-    const colFarmingType = findCol(['hinhthuc', 'chuong', 'loaihinh']);
-    const colWasteMethod = findCol(['xulychatthai', 'chatthai', 'phuongphap', 'biogas', 'hientai']);
-    const colGroup = findCol(['nhomnghiencuu', 'nhom', 'group']);
-    const colResearcher = findCol(['nguoinghiencuu', 'nghiencuuvien', 'phutrach', 'canbo']);
-    const colNotes = findCol(['ghichu', 'note', 'notes']);
-
-    const rows: ParsedHouseholdRow[] = [];
-    const seenIds = new Set<string>();
-
-    for (let i = headerRowIndex + 1; i < rawData.length; i++) {
-      const r = rawData[i];
-      // Bỏ qua dòng trống hoàn toàn
-      if (!r || r.every((cell: any) => String(cell).trim() === '')) continue;
-
-      const errors: string[] = [];
-      const warnings: string[] = [];
-
-      // 1. Mã hộ
-      let id = colId >= 0 ? String(r[colId] || '').trim().toUpperCase() : '';
-      if (!id) {
-        // Tự sinh mã tạm thời nếu người dùng quên nhập mã
-        const autoNum = rows.length + 1;
-        id = `H${autoNum.toString().padStart(2, '0')}`;
-        warnings.push(`Chưa có mã hộ, hệ thống tự gán mã: ${id}`);
-      }
-
-      if (seenIds.has(id)) {
-        errors.push(`Mã hộ "${id}" bị trùng lặp trong tệp Excel.`);
-      } else {
-        seenIds.add(id);
-      }
-
-      // 2. Tên chủ hộ
-      const representativeName = colName >= 0 ? String(r[colName] || '').trim() : '';
-      if (!representativeName) {
-        errors.push('Thiếu họ và tên chủ hộ.');
-      }
-
-      // 3. Số điện thoại
-      const phone = colPhone >= 0 ? String(r[colPhone] || '').trim().replace(/[^0-9]/g, '') : '';
-      if (!phone) {
-        warnings.push('Chưa có số điện thoại.');
-      }
-
-      // 4. Địa chỉ
-      const address = colAddress >= 0 ? String(r[colAddress] || '').trim() : '';
-
-      // 5. Loại vật nuôi
-      const livestockType = colLivestock >= 0 ? String(r[colLivestock] || '').trim() || 'Lợn thịt' : 'Lợn thịt';
-
-      // 6. Quy mô đàn
-      const rawHerd = colHerdSize >= 0 ? Number(r[colHerdSize]) : 50;
-      const herdSize = !isNaN(rawHerd) && rawHerd > 0 ? rawHerd : 50;
-
-      // 7. Số năm
-      const rawYears = colFarmingYears >= 0 ? Number(r[colFarmingYears]) : 5;
-      const farmingYears = !isNaN(rawYears) && rawYears >= 0 ? rawYears : 3;
-
-      // 8. Hình thức
-      const farmingType = colFarmingType >= 0 ? String(r[colFarmingType] || '').trim() || 'Gia trại chuồng hở' : 'Gia trại chuồng hở';
-
-      // 9. Xử lý chất thải
-      const currentWasteMethod = colWasteMethod >= 0 ? String(r[colWasteMethod] || '').trim() || 'Biogas composite' : 'Biogas composite';
-
-      // 10. Nhóm nghiên cứu
-      let group: StudyGroup = 'TN';
-      const rawGroup = colGroup >= 0 ? normalizeHeader(r[colGroup]) : '';
-      if (rawGroup.includes('dc') || rawGroup.includes('doi') || rawGroup.includes('control')) {
-        group = 'DC';
-      } else if (rawGroup.includes('tn') || rawGroup.includes('canthiep') || rawGroup.includes('treat')) {
-        group = 'TN';
-      } else {
-        // Tự động phân nửa đầu TN, nửa sau ĐC nếu không ghi rõ
-        group = rows.length < 20 ? 'TN' : 'DC';
-        warnings.push(`Chưa chỉ định nhóm, tạm gán nhóm: ${group}`);
-      }
-
-      // 11. Cán bộ phụ trách
-      const assignedResearcher = colResearcher >= 0 ? String(r[colResearcher] || '').trim() : '';
-
-      // 12. Ghi chú
-      const notes = colNotes >= 0 ? String(r[colNotes] || '').trim() : '';
-
-      const isValid = errors.length === 0;
-
-      rows.push({
-        rowNumber: i + 1,
-        id,
-        representativeName,
-        phone,
-        address,
-        livestockType,
-        herdSize,
-        farmingYears,
-        farmingType,
-        currentWasteMethod,
-        group,
-        assignedResearcher,
-        notes,
-        isValid,
-        errors,
-        warnings,
-      });
-    }
-
-    const validCount = rows.filter(r => r.isValid).length;
-    const errorCount = rows.length - validCount;
-
+    const res = await this.parseUniversalFile(file);
     return {
-      sheetName,
-      rows,
-      validCount,
-      errorCount,
+      sheetName: res.sheetNames.join(', '),
+      rows: res.households,
+      validCount: res.households.filter(h => h.isValid).length,
+      errorCount: res.households.filter(h => !h.isValid).length,
     };
   }
 
   /**
-   * Đọc và phân tích file Excel / CSV nhập Người hướng dẫn & Nghiên cứu viên
+   * Tương thích ngược: Đọc và phân tích file Cán bộ & Học viên
    */
   static async parseResearchTeamFile(file: File): Promise<{
     sheetName: string;
@@ -436,217 +785,63 @@ export class ExcelImportService {
     validCount: number;
     errorCount: number;
   }> {
-    const buffer = await file.arrayBuffer();
-    const wb = XLSX.read(buffer, { type: 'array' });
-
-    // Ưu tiên sheet có tên chứa "NGHIEN_CUU" hoặc "HUONG_DAN" hoặc sheet thứ 2 nếu có
-    let sheetName = wb.SheetNames[0];
-    const foundTeamSheet = wb.SheetNames.find(s => {
-      const n = normalizeHeader(s);
-      return n.includes('nghiencuu') || n.includes('huongdan') || n.includes('team') || n.includes('canbo');
-    });
-    if (foundTeamSheet) {
-      sheetName = foundTeamSheet;
-    } else if (wb.SheetNames.length > 1 && normalizeHeader(wb.SheetNames[0]).includes('ho')) {
-      sheetName = wb.SheetNames[1];
-    }
-
-    const ws = wb.Sheets[sheetName];
-    if (!ws) {
-      throw new Error('Không tìm thấy dữ liệu nhóm nghiên cứu trong tệp Excel.');
-    }
-
-    const rawData: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
-    if (rawData.length < 2) {
-      throw new Error('Tệp Excel không có đủ dữ liệu (ít nhất cần 1 dòng tiêu đề và 1 dòng dữ liệu).');
-    }
-
-    let headerRowIndex = 0;
-    for (let i = 0; i < Math.min(rawData.length, 5); i++) {
-      const rowStr = rawData[i].map(normalizeHeader).join(' ');
-      if (rowStr.includes('ten') || rowStr.includes('vaitro') || rowStr.includes('username') || rowStr.includes('role')) {
-        headerRowIndex = i;
-        break;
-      }
-    }
-
-    const headerRow = rawData[headerRowIndex].map(normalizeHeader);
-
-    const findCol = (keywords: string[]) => {
-      return headerRow.findIndex(h => keywords.some(k => h.includes(k)));
-    };
-
-    const colUsername = findCol(['tendangnhap', 'username', 'taikhoan', 'user']);
-    const colName = findCol(['hovaten', 'hoten', 'ten', 'fullname']);
-    const colRole = findCol(['vaitro', 'role', 'chucdanh', 'loaitaikhoan']);
-    const colTitle = findCol(['hocham', 'hocvi', 'chucvu', 'title']);
-    const colOrg = findCol(['donvi', 'coquan', 'truong', 'vien', 'organization']);
-    const colPhone = findCol(['sodienthoai', 'dienthoai', 'sdt', 'phone']);
-    const colEmail = findCol(['email', 'mail']);
-    const colPassword = findCol(['matkhau', 'password', 'pass']);
-
-    const rows: ParsedUserRow[] = [];
-    const seenUsernames = new Set<string>();
-
-    for (let i = headerRowIndex + 1; i < rawData.length; i++) {
-      const r = rawData[i];
-      if (!r || r.every((cell: any) => String(cell).trim() === '')) continue;
-
-      const errors: string[] = [];
-      const warnings: string[] = [];
-
-      // 1. Họ và tên
-      const fullName = colName >= 0 ? String(r[colName] || '').trim() : '';
-      if (!fullName) {
-        errors.push('Thiếu họ và tên cán bộ/người hướng dẫn.');
-      }
-
-      // 2. Tên đăng nhập
-      let username = colUsername >= 0 ? String(r[colUsername] || '').trim().toLowerCase() : '';
-      if (!username) {
-        // Tự sinh username từ tên không dấu
-        if (fullName) {
-          const cleanName = normalizeHeader(fullName);
-          username = cleanName.substring(0, 15) + (rows.length + 1);
-          warnings.push(`Chưa có tên đăng nhập, tự động tạo: ${username}`);
-        } else {
-          username = `user_${Date.now()}_${rows.length + 1}`;
-          errors.push('Thiếu tên đăng nhập.');
-        }
-      }
-
-      if (seenUsernames.has(username)) {
-        errors.push(`Tên đăng nhập "${username}" bị trùng lặp.`);
-      } else {
-        seenUsernames.add(username);
-      }
-
-      // 3. Vai trò
-      let role: Role = 'RESEARCHER';
-      const rawRole = colRole >= 0 ? normalizeHeader(r[colRole]) : '';
-      if (rawRole.includes('huongdan') || rawRole.includes('supervisor') || rawRole.includes('covan') || rawRole.includes('giangvien')) {
-        role = 'SUPERVISOR';
-      } else if (rawRole.includes('admin') || rawRole.includes('quantri') || rawRole.includes('chunhiem')) {
-        role = 'ADMIN';
-      } else if (rawRole.includes('ho') || rawRole.includes('household')) {
-        role = 'HOUSEHOLD';
-      } else {
-        role = 'RESEARCHER';
-      }
-
-      // 4. Học hàm/học vị
-      const title = colTitle >= 0 ? String(r[colTitle] || '').trim() : '';
-
-      // 5. Đơn vị công tác
-      const organization = colOrg >= 0 ? String(r[colOrg] || '').trim() : '';
-
-      // 6. Số điện thoại
-      const phone = colPhone >= 0 ? String(r[colPhone] || '').trim().replace(/[^0-9]/g, '') : '';
-
-      // 7. Email
-      const email = colEmail >= 0 ? String(r[colEmail] || '').trim() : '';
-
-      // 8. Mật khẩu
-      const password = colPassword >= 0 && String(r[colPassword] || '').trim()
-        ? String(r[colPassword] || '').trim()
-        : '123456';
-
-      const isValid = errors.length === 0;
-
-      rows.push({
-        rowNumber: i + 1,
-        username,
-        fullName,
-        role,
-        title,
-        organization,
-        phone,
-        email,
-        password,
-        isValid,
-        errors,
-        warnings,
-      });
-    }
-
-    const validCount = rows.filter(r => r.isValid).length;
-    const errorCount = rows.length - validCount;
-
+    const res = await this.parseUniversalFile(file);
     return {
-      sheetName,
-      rows,
-      validCount,
-      errorCount,
+      sheetName: res.sheetNames.join(', '),
+      rows: res.users,
+      validCount: res.counts.validCount,
+      errorCount: res.counts.errorCount,
     };
   }
 
   /**
-   * Lưu các hộ chăn nuôi đã phân tích vào hệ thống
+   * LƯU TOÀN DIỆN VÀ AN TOÀN TẤT CẢ DỮ LIỆU ĐÃ NHẬP
+   * Đảm bảo:
+   * 1. Users được lưu và cấp mật khẩu trực tiếp, không băm SHA-256 (đăng nhập được ngay)
+   * 2. Households được lưu tương ứng
+   * 3. Phiếu BC-01 được tự động tạo và liên thông
+   * 4. Kích hoạt đồng bộ vĩnh viễn lên Google Sheets
    */
-  static async saveImportedHouseholds(
-    parsedRows: ParsedHouseholdRow[],
+  static async saveUniversalImport(
+    result: UnifiedParseResult,
     mode: 'MERGE' | 'REPLACE',
-    createAccounts: boolean,
     currentUser: User
-  ): Promise<{ savedCount: number; accountsCreated: number }> {
-    const validRows = parsedRows.filter(r => r.isValid);
-    if (validRows.length === 0) {
-      throw new Error('Không có dòng dữ liệu nào hợp lệ để lưu.');
+  ): Promise<{
+    usersCount: number;
+    householdsCount: number;
+    supervisorsCount: number;
+    researchersCount: number;
+    householdsAccountCount: number;
+  }> {
+    const validUsers = result.users.filter(u => u.isValid);
+    if (validUsers.length === 0) {
+      throw new Error('Không có dòng tài khoản nào hợp lệ để lưu.');
     }
 
-    const existingHouseholds = StorageService.getHouseholds();
     const existingUsers = StorageService.getUsers();
-
-    const newHouseholds: Household[] = validRows.map(r => {
-      const existing = existingHouseholds.find(h => h.id === r.id);
-      return {
-        id: r.id,
-        representativeName: r.representativeName,
-        phone: r.phone,
-        address: r.address,
-        livestockType: r.livestockType,
-        herdSize: r.herdSize,
-        farmingYears: r.farmingYears,
-        farmingType: r.farmingType,
-        currentWasteMethod: r.currentWasteMethod,
-        group: r.group,
-        accountStatus: existing ? existing.accountStatus : 'ACTIVE',
-        joinedDate: existing ? existing.joinedDate : new Date().toISOString().split('T')[0],
-        assignedResearcher: r.assignedResearcher,
-        notes: r.notes,
-        createdAt: existing ? existing.createdAt : new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        updatedBy: currentUser.username,
-        isLocked: false,
-      };
-    });
-
-    let finalList: Household[] = [];
-    if (mode === 'REPLACE') {
-      finalList = newHouseholds;
-    } else {
-      // MERGE: Thay thế hộ có cùng id, thêm mới hộ chưa có
-      const map = new Map<string, Household>();
-      existingHouseholds.forEach(h => map.set(h.id, h));
-      newHouseholds.forEach(h => map.set(h.id, h));
-      finalList = Array.from(map.values());
-    }
-
-    // Sắp xếp theo mã hộ H01, H02...
-    finalList.sort((a, b) => a.id.localeCompare(b.id));
-    StorageService.saveHouseholds(finalList);
-
-    // Đồng bộ tức thì vào phiếu BC-01 để tất cả các module khảo sát liên kết thông suốt
+    const existingHouseholds = StorageService.getHouseholds();
     const existingBC01 = StorageService.getBC01List();
+
+    const userMap = new Map<string, User>();
+    const householdMap = new Map<string, Household>();
     const bc01Map = new Map<string, BC01Record>();
-    if (mode === 'MERGE') {
-      existingBC01.forEach((b) => bc01Map.set(b.householdId, b));
+
+    if (mode === 'REPLACE') {
+      // Giữ lại Admin hiện tại
+      const currentAdmin = existingUsers.find(u => u.username === 'admin') || currentUser;
+      userMap.set(currentAdmin.username.toLowerCase(), currentAdmin);
+    } else {
+      existingUsers.forEach(u => userMap.set(u.username.toLowerCase(), u));
+      existingHouseholds.forEach(h => householdMap.set(h.id.toUpperCase(), h));
+      existingBC01.forEach(b => bc01Map.set(b.householdId.toUpperCase(), b));
     }
-    for (const h of finalList) {
-      const prev = bc01Map.get(h.id);
-      bc01Map.set(h.id, {
-        id: prev?.id || `BC01_${h.id}`,
-        householdId: h.id,
+
+    // 1. Xử lý lưu Hộ chăn nuôi từ danh sách households
+    for (const h of result.households.filter(h => h.isValid)) {
+      const hid = h.id.toUpperCase();
+      const prevH = householdMap.get(hid);
+      const newH: Household = {
+        id: hid,
         representativeName: h.representativeName,
         phone: h.phone,
         address: h.address,
@@ -655,131 +850,235 @@ export class ExcelImportService {
         farmingYears: h.farmingYears,
         farmingType: h.farmingType,
         currentWasteMethod: h.currentWasteMethod,
+        group: h.group,
+        accountStatus: prevH ? prevH.accountStatus : 'ACTIVE',
+        joinedDate: prevH ? prevH.joinedDate : new Date().toISOString().split('T')[0],
+        assignedResearcher: h.assignedResearcher,
         notes: h.notes,
-        isLocked: prev?.isLocked || false,
-        createdAt: prev?.createdAt || new Date().toISOString(),
-        createdBy: prev?.createdBy || currentUser.username,
+        createdAt: prevH ? prevH.createdAt : new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        updatedBy: currentUser.username,
+        isLocked: false,
+      };
+      householdMap.set(hid, newH);
+
+      // Đồng bộ sang BC-01
+      const prevBc = bc01Map.get(hid);
+      bc01Map.set(hid, {
+        id: prevBc?.id || `BC01_${hid}`,
+        householdId: hid,
+        representativeName: newH.representativeName,
+        phone: newH.phone,
+        address: newH.address,
+        livestockType: newH.livestockType,
+        herdSize: newH.herdSize,
+        farmingYears: newH.farmingYears,
+        farmingType: newH.farmingType,
+        currentWasteMethod: newH.currentWasteMethod,
+        notes: newH.notes,
+        isLocked: prevBc?.isLocked || false,
+        createdAt: prevBc?.createdAt || new Date().toISOString(),
+        createdBy: prevBc?.createdBy || currentUser.username,
         updatedAt: new Date().toISOString(),
         updatedBy: currentUser.username,
       });
     }
-    StorageService.saveBC01List(Array.from(bc01Map.values()));
 
-    // Tạo tài khoản cho hộ chăn nuôi nếu tùy chọn được bật
-    let accountsCreated = 0;
-    if (createAccounts) {
-      const userMap = new Map<string, User>();
-      existingUsers.forEach(u => userMap.set(u.username.toLowerCase(), u));
+    // 2. Xử lý lưu danh sách Tài khoản Users (Mật khẩu lưu trực tiếp, không băm SHA-256 phức tạp)
+    let supervisorsCount = 0;
+    let researchersCount = 0;
+    let householdsAccountCount = 0;
 
-      for (const h of newHouseholds) {
-        const username = h.id.toLowerCase();
-        if (!userMap.has(username)) {
-          const salt = generateSalt(16);
-          const passwordHash = await hashPassword('123456', salt);
-          const newUser: User = {
-            id: `USR_${h.id}_${Date.now()}`,
-            username,
-            fullName: h.representativeName,
-            phone: h.phone,
-            role: 'HOUSEHOLD',
-            householdId: h.id,
-            status: 'ACTIVE',
-            passwordHash,
-            salt,
-            plainPasswordHint: '123456',
+    for (const u of validUsers) {
+      const key = u.username.toLowerCase();
+      const existing = userMap.get(key);
+
+      const pass = u.password || existing?.plainPasswordHint || existing?.password || '123456';
+
+      const userObj: User = {
+        id: existing?.id || `USR_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+        username: u.username.toLowerCase(),
+        fullName: u.fullName,
+        role: u.role,
+        title: u.title || (u.role === 'SUPERVISOR' ? 'Giảng viên' : (u.role === 'ADMIN' ? 'Quản trị viên' : (u.role === 'HOUSEHOLD' ? 'Chủ hộ' : 'Học viên'))),
+        organization: u.organization,
+        phone: u.phone,
+        email: u.email,
+        householdId: u.householdId,
+        status: existing?.status || 'ACTIVE',
+        password: pass,
+        plainPasswordHint: pass,
+        createdAt: existing?.createdAt || new Date().toISOString(),
+      };
+
+      userMap.set(key, userObj);
+
+      if (u.role === 'SUPERVISOR') supervisorsCount++;
+      else if (u.role === 'RESEARCHER') researchersCount++;
+      else if (u.role === 'HOUSEHOLD') {
+        householdsAccountCount++;
+        // Đảm bảo Hộ chăn nuôi cũng tồn tại trong danh mục Household nếu chưa có
+        const hid = (u.householdId || u.username).toUpperCase();
+        if (!householdMap.has(hid)) {
+          const newH: Household = {
+            id: hid,
+            representativeName: u.fullName,
+            phone: u.phone,
+            address: u.address || 'Khu vực chăn nuôi gà',
+            livestockType: u.livestockType || 'Gà ri lai thả vườn',
+            herdSize: u.herdSize || 500,
+            farmingYears: 3,
+            farmingType: u.farmingType || 'Bán chăn thả có đệm lót sinh học',
+            currentWasteMethod: u.currentWasteMethod || 'Đệm lót sinh học Balasa N01',
+            group: u.group || 'TN',
+            accountStatus: 'ACTIVE',
+            joinedDate: new Date().toISOString().split('T')[0],
+            assignedResearcher: 'Chưa phân công',
             createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            updatedBy: currentUser.username,
           };
-          userMap.set(username, newUser);
-          accountsCreated++;
+          householdMap.set(hid, newH);
+
+          // Tạo BC-01
+          bc01Map.set(hid, {
+            id: `BC01_${hid}`,
+            householdId: hid,
+            representativeName: newH.representativeName,
+            phone: newH.phone,
+            address: newH.address,
+            livestockType: newH.livestockType,
+            herdSize: newH.herdSize,
+            farmingYears: newH.farmingYears,
+            farmingType: newH.farmingType,
+            currentWasteMethod: newH.currentWasteMethod,
+            notes: 'Tự động tạo từ danh sách tài khoản hộ chăn nuôi',
+            isLocked: false,
+            createdAt: new Date().toISOString(),
+            createdBy: currentUser.username,
+            updatedAt: new Date().toISOString(),
+            updatedBy: currentUser.username,
+          });
         }
       }
-
-      StorageService.saveUsers(Array.from(userMap.values()));
     }
 
+    // 3. Lưu vào StorageService
+    const finalUsers = Array.from(userMap.values());
+    const finalHouseholds = Array.from(householdMap.values()).sort((a, b) => a.id.localeCompare(b.id));
+    const finalBC01 = Array.from(bc01Map.values()).sort((a, b) => a.householdId.localeCompare(b.householdId));
+
+    StorageService.saveUsers(finalUsers);
+    StorageService.saveHouseholds(finalHouseholds);
+    StorageService.saveBC01List(finalBC01);
+
+    // 4. Ghi Audit Log
     StorageService.addAuditLog({
       userId: currentUser.id,
       username: currentUser.username,
       userRole: currentUser.role,
       action: 'IMPORT_EXCEL',
-      targetModule: 'HOUSEHOLDS',
-      reason: `Nhập ${validRows.length} hộ chăn nuôi từ tệp Excel (${mode === 'REPLACE' ? 'Thay thế toàn bộ' : 'Gộp dữ liệu'}), tạo ${accountsCreated} tài khoản mới.`,
+      targetModule: 'ALL_ACCOUNTS',
+      reason: `Nhập dữ liệu tệp: ${validUsers.length} tài khoản (${supervisorsCount} GV/HDAN, ${researchersCount} HS, ${householdsAccountCount} hộ), ${finalHouseholds.length} hồ sơ hộ chăn nuôi.`,
     });
 
+    // 5. Kích hoạt đồng bộ lưu trữ vĩnh viễn lên Google Sheets ngay lập tức
+    GoogleSheetsService.triggerAutoSave(50);
+
     return {
-      savedCount: validRows.length,
-      accountsCreated,
+      usersCount: validUsers.length,
+      householdsCount: finalHouseholds.length,
+      supervisorsCount,
+      researchersCount,
+      householdsAccountCount,
     };
   }
 
   /**
-   * Lưu danh sách Người hướng dẫn & Nghiên cứu viên đã phân tích vào hệ thống
+   * Lưu các Hộ chăn nuôi gà vào hệ thống (tương thích các lời gọi cũ)
+   */
+  static async saveImportedHouseholds(
+    parsedRows: ParsedHouseholdRow[],
+    mode: 'MERGE' | 'REPLACE',
+    createAccounts: boolean,
+    currentUser: User
+  ): Promise<{ savedCount: number; accountsCreated: number }> {
+    const res = await this.saveUniversalImport(
+      {
+        sheetNames: ['HO_CHAN_NUOI'],
+        totalRows: parsedRows.length,
+        users: parsedRows.map(h => ({
+          rowNumber: h.rowNumber,
+          username: h.id.toLowerCase(),
+          fullName: h.representativeName,
+          role: 'HOUSEHOLD' as Role,
+          roleTitle: 'Hộ chăn nuôi gà',
+          title: 'Chủ hộ',
+          organization: h.address,
+          phone: h.phone,
+          email: '',
+          householdId: h.id,
+          password: h.password || '123456',
+          address: h.address,
+          livestockType: h.livestockType,
+          herdSize: h.herdSize,
+          farmingType: h.farmingType,
+          currentWasteMethod: h.currentWasteMethod,
+          group: h.group,
+          isValid: h.isValid,
+          errors: h.errors,
+          warnings: h.warnings,
+        })),
+        households: parsedRows,
+        counts: {
+          supervisors: 0,
+          researchers: 0,
+          households: parsedRows.length,
+          admins: 0,
+          validCount: parsedRows.filter(r => r.isValid).length,
+          errorCount: parsedRows.filter(r => !r.isValid).length,
+        }
+      },
+      mode,
+      currentUser
+    );
+
+    return {
+      savedCount: res.householdsCount,
+      accountsCreated: res.householdsAccountCount,
+    };
+  }
+
+  /**
+   * Lưu danh sách Giảng viên, Học viên, Hướng dẫn (tương thích các lời gọi cũ)
    */
   static async saveImportedResearchTeam(
     parsedRows: ParsedUserRow[],
     mode: 'MERGE' | 'REPLACE',
     currentUser: User
-  ): Promise<{ savedCount: number }> {
-    const validRows = parsedRows.filter(r => r.isValid);
-    if (validRows.length === 0) {
-      throw new Error('Không có dòng cán bộ nào hợp lệ để lưu.');
-    }
-
-    const existingUsers = StorageService.getUsers();
-    const userMap = new Map<string, User>();
-
-    // Nếu mode là REPLACE: Giữ lại Admin hiện tại, xóa các tài khoản khác
-    if (mode === 'REPLACE') {
-      const currentAdmin = existingUsers.find(u => u.username === 'admin') || currentUser;
-      userMap.set(currentAdmin.username.toLowerCase(), currentAdmin);
-    } else {
-      existingUsers.forEach(u => userMap.set(u.username.toLowerCase(), u));
-    }
-
-    for (const r of validRows) {
-      const key = r.username.toLowerCase();
-      const existing = userMap.get(key);
-
-      const salt = existing ? existing.salt : generateSalt(16);
-      const passwordHash = r.password
-        ? await hashPassword(r.password, salt)
-        : existing
-        ? existing.passwordHash
-        : await hashPassword('123456', salt);
-
-      const userObj: User = {
-        id: existing ? existing.id : `USR_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
-        username: r.username,
-        fullName: r.fullName,
-        role: r.role,
-        title: r.title || (r.role === 'SUPERVISOR' ? 'Người hướng dẫn' : 'Nghiên cứu viên'),
-        organization: r.organization,
-        phone: r.phone,
-        email: r.email,
-        status: existing ? existing.status : 'ACTIVE',
-        passwordHash,
-        salt,
-        plainPasswordHint: r.password || (existing ? existing.plainPasswordHint : '123456'),
-        createdAt: existing ? existing.createdAt : new Date().toISOString(),
-      };
-
-      userMap.set(key, userObj);
-    }
-
-    const finalList = Array.from(userMap.values());
-    StorageService.saveUsers(finalList);
-
-    StorageService.addAuditLog({
-      userId: currentUser.id,
-      username: currentUser.username,
-      userRole: currentUser.role,
-      action: 'IMPORT_EXCEL',
-      targetModule: 'USERS',
-      reason: `Nhập ${validRows.length} cán bộ (Người hướng dẫn / Nghiên cứu viên) từ tệp Excel.`,
-    });
+  ): Promise<{ savedCount: number; householdsCreated: number }> {
+    const res = await this.saveUniversalImport(
+      {
+        sheetNames: ['CAN_BO_VA_HOC_VIEN'],
+        totalRows: parsedRows.length,
+        users: parsedRows,
+        households: [],
+        counts: {
+          supervisors: parsedRows.filter(r => r.role === 'SUPERVISOR').length,
+          researchers: parsedRows.filter(r => r.role === 'RESEARCHER').length,
+          households: parsedRows.filter(r => r.role === 'HOUSEHOLD').length,
+          admins: parsedRows.filter(r => r.role === 'ADMIN').length,
+          validCount: parsedRows.filter(r => r.isValid).length,
+          errorCount: parsedRows.filter(r => !r.isValid).length,
+        }
+      },
+      mode,
+      currentUser
+    );
 
     return {
-      savedCount: validRows.length,
+      savedCount: res.usersCount,
+      householdsCreated: res.householdsAccountCount,
     };
   }
 }

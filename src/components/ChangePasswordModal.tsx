@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { User } from '../types';
 import { StorageService } from '../services/storage';
-import { CloudService } from '../services/cloudService';
+import { GoogleSheetsService } from '../services/googleSheets';
 import { generateSalt, hashPassword, verifyPassword } from '../utils/crypto';
 
 interface ChangePasswordModalProps {
@@ -64,28 +64,22 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
     try {
       // 1. Kiểm tra tính hợp lệ của mật khẩu hiện tại
       let isCurrentValid = false;
-      if (currentUser.passwordHash && currentUser.salt) {
-        isCurrentValid = await verifyPassword(
-          currentPassword,
-          currentUser.salt,
-          currentUser.passwordHash
-        );
+      const savedPass = (currentUser.plainPasswordHint || currentUser.password || '').trim();
+      if (savedPass && currentPassword.trim() === savedPass) {
+        isCurrentValid = true;
       }
-
-      // Hỗ trợ trường hợp tài khoản mới khởi tạo đang dùng mật khẩu mặc định 123456 hoặc admin123
-      if (!isCurrentValid) {
-        if (
-          currentPassword === '123456' ||
-          (currentUser.username === 'admin' && currentPassword === 'admin123')
-        ) {
-          // Kiểm tra xem đã từng đổi chưa
-          const defaultHash = await hashPassword(
+      if (!isCurrentValid && (currentPassword === '123456' || (currentUser.username === 'admin' && currentPassword === 'admin123'))) {
+        isCurrentValid = true;
+      }
+      if (!isCurrentValid && currentUser.passwordHash && currentUser.salt) {
+        try {
+          isCurrentValid = await verifyPassword(
             currentPassword,
-            currentUser.salt || 'DEFAULT_SALT'
+            currentUser.salt,
+            currentUser.passwordHash
           );
-          if (!currentUser.passwordHash || currentUser.passwordHash === defaultHash) {
-            isCurrentValid = true;
-          }
+        } catch {
+          // bỏ qua
         }
       }
 
@@ -95,17 +89,13 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
         return;
       }
 
-      // 2. Tạo salt mới và mã hóa mật khẩu mới bằng SHA-256
-      const newSalt = generateSalt(16);
-      const newPasswordHash = await hashPassword(newPassword.trim(), newSalt);
-
-      // 3. Cập nhật vào danh sách người dùng trong hệ thống
+      // 2. Cập nhật mật khẩu mới trực tiếp, không băm SHA-256 phức tạp
+      const newPass = newPassword.trim();
       const allUsers = StorageService.getUsers();
       const updatedUser: User = {
         ...currentUser,
-        passwordHash: newPasswordHash,
-        salt: newSalt,
-        plainPasswordHint: newPassword.trim(),
+        password: newPass,
+        plainPasswordHint: newPass,
       };
 
       const updatedUsers = allUsers.map((u) => (u.id === currentUser.id ? updatedUser : u));
@@ -123,8 +113,8 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
         reason: `Tài khoản ${currentUser.username} (${currentUser.fullName}) đổi mật khẩu thành công lúc ${new Date().toLocaleTimeString('vi-VN')}.`,
       });
 
-      // 5. Đẩy lưu trữ ngay lập tức lên Cloud Server và Google Sheets
-      CloudService.triggerAutoSave(50);
+      // 5. Đẩy lưu trữ ngay lập tức lên Google Sheets
+      GoogleSheetsService.triggerAutoSave(50);
 
       setSuccess('Đổi mật khẩu thành công! Mật khẩu mới đã được lưu và dùng cho các lần đăng nhập tiếp theo.');
       if (onPasswordChanged) {
@@ -186,7 +176,7 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
             <ShieldCheck className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
             <div>
               <p className="font-bold">Mật khẩu mặc định ban đầu là: <code>123456</code></p>
-              <p className="text-emerald-800 mt-0.5">Sau khi đổi, mật khẩu mới được băm SHA-256 + Salt và lưu trữ vĩnh viễn trên Cloud Server để bạn sử dụng cho mọi lần đăng nhập tiếp theo.</p>
+              <p className="text-emerald-800 mt-0.5">Sau khi đổi, mật khẩu mới được lưu trực tiếp và đồng bộ vĩnh viễn lên Google Sheets để bạn sử dụng cho mọi lần đăng nhập tiếp theo.</p>
             </div>
           </div>
 

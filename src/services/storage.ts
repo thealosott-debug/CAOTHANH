@@ -27,7 +27,6 @@ import {
   generateInitialHouseholds,
   KNOWLEDGE_QUESTIONS,
 } from '../config/initialData';
-import { hashPassword } from '../utils/crypto';
 
 const STORAGE_KEYS = {
   CONFIG: 'gfr_research_config_v1',
@@ -335,6 +334,9 @@ export class StorageService {
 
   static setSyncStatus(status: SyncStatus): void {
     localStorage.setItem(STORAGE_KEYS.SYNC_STATUS, status);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gfr_data_change'));
+    }
   }
 
   // --- TÍNH TOÁN VÀ TỔNG HỢP BC-08 TỰ ĐỘNG ---
@@ -411,8 +413,6 @@ export class StorageService {
 
     // Chỉ bổ sung tài khoản Admin mặc định nếu hệ thống chưa từng có admin
     if (!hasAdmin) {
-      const salt = 'SALT_ADMIN_999';
-      const hash = await hashPassword('123456', salt);
       const adminUser: User = {
         id: 'USR_ADMIN_01',
         username: 'admin',
@@ -421,8 +421,7 @@ export class StorageService {
         phone: '',
         role: 'ADMIN',
         status: 'ACTIVE',
-        passwordHash: hash,
-        salt,
+        password: '123456',
         plainPasswordHint: '123456',
         createdAt: new Date().toISOString(),
       };
@@ -434,8 +433,6 @@ export class StorageService {
 
   // --- XÓA TOÀN BỘ DỮ LIỆU NỀN MẪU, ĐỂ TRẮNG ĐÓN DỮ LIỆU THỰC TẾ ---
   static async resetToCleanState(): Promise<void> {
-    const salt = 'SALT_ADMIN_999';
-    const hash = await hashPassword('admin123', salt);
     const adminUser: User = {
       id: 'USR_ADMIN_01',
       username: 'admin',
@@ -444,8 +441,8 @@ export class StorageService {
       phone: '',
       role: 'ADMIN',
       status: 'ACTIVE',
-      passwordHash: hash,
-      salt,
+      password: '123456',
+      plainPasswordHint: '123456',
       createdAt: new Date().toISOString(),
     };
 

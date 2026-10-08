@@ -16,13 +16,14 @@ import {
   Save,
   Trash2,
   Download,
+  RefreshCw,
 } from 'lucide-react';
 import { BC01Record, Household, Role, StudyGroup, User } from '../types';
 import { StorageService } from '../services/storage';
+import { GoogleSheetsService } from '../services/googleSheets';
 import { UnlockModal } from '../components/UnlockModal';
 import { ExcelImportModal } from '../components/ExcelImportModal';
 import { ExcelImportService } from '../services/excelImportService';
-import { generateSalt, hashPassword } from '../utils/crypto';
 
 interface HouseholdManagementProps {
   currentUser: User;
@@ -56,17 +57,49 @@ export const HouseholdManagement: React.FC<HouseholdManagementProps> = ({
     (u) => u.role === 'RESEARCHER' || u.role === 'ADMIN'
   );
 
+  const [isSyncingSheets, setIsSyncingSheets] = useState(false);
+  const [syncStatusMsg, setSyncStatusMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const handleSyncFromSheets = async () => {
+    setIsSyncingSheets(true);
+    setSyncStatusMsg(null);
+    try {
+      const res = await GoogleSheetsService.pullFromGoogleSheets();
+      const updated = StorageService.getHouseholds();
+      setHouseholds(updated);
+      if (res.success) {
+        setSyncStatusMsg({
+          type: 'success',
+          text: res.message || `Đã đồng bộ thành công ${updated.length} hộ nuôi gà từ Google Sheets!`,
+        });
+      } else {
+        setSyncStatusMsg({
+          type: 'error',
+          text: res.message || 'Lỗi khi đồng bộ từ Google Sheets.',
+        });
+      }
+      if (onRefreshData) onRefreshData();
+    } catch (err: any) {
+      setSyncStatusMsg({
+        type: 'error',
+        text: `Lỗi kết nối: ${err.message}`,
+      });
+    } finally {
+      setIsSyncingSheets(false);
+    }
+  };
+
   // Form state
   const [formData, setFormData] = useState({
     id: '',
     representativeName: '',
     phone: '',
     address: '',
-    livestockType: 'Lợn thịt',
-    herdSize: 50,
+    livestockType: 'Gà ri lai thả vườn',
+    herdSize: 500,
     farmingYears: 3,
-    farmingType: 'Gia trại chuồng hở',
-    currentWasteMethod: 'Biogas composite',
+    farmingType: 'Bán chăn thả có đệm lót sinh học',
+    currentWasteMethod: 'Đệm lót sinh học Balasa N01',
     group: 'TN' as StudyGroup,
     assignedResearcher: '',
     notes: '',
@@ -98,11 +131,11 @@ export const HouseholdManagement: React.FC<HouseholdManagementProps> = ({
       representativeName: '',
       phone: '',
       address: '',
-      livestockType: 'Lợn thịt',
-      herdSize: 50,
+      livestockType: 'Gà ri lai thả vườn',
+      herdSize: 500,
       farmingYears: 3,
-      farmingType: 'Gia trại chuồng hở',
-      currentWasteMethod: 'Biogas composite',
+      farmingType: 'Bán chăn thả có đệm lót sinh học',
+      currentWasteMethod: 'Đệm lót sinh học Balasa N01',
       group: nextNum <= 20 ? 'TN' : 'DC',
       assignedResearcher: availableResearchers[0]?.fullName || '',
       notes: '',
@@ -151,8 +184,8 @@ export const HouseholdManagement: React.FC<HouseholdManagementProps> = ({
   // Lưu hộ chăn nuôi
   const handleSaveHousehold = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.id.trim() || !formData.representativeName.trim() || !formData.phone.trim()) {
-      setFormError('Vui lòng điền đầy đủ Mã hộ, Họ tên đại diện và Số điện thoại.');
+    if (!formData.id.trim() || !formData.representativeName.trim()) {
+      setFormError('Vui lòng điền đầy đủ Mã hộ và Họ tên đại diện.');
       return;
     }
 
@@ -283,8 +316,6 @@ export const HouseholdManagement: React.FC<HouseholdManagementProps> = ({
       // Tự động cấp tài khoản đăng nhập cho hộ chăn nuôi nếu chưa có (Mật khẩu mặc định: 123456)
       const userList = StorageService.getUsers();
       if (!userList.some((u) => u.householdId === newH.id || u.username === newH.id.toLowerCase())) {
-        const hSalt = generateSalt(16);
-        const hHash = await hashPassword('123456', hSalt);
         userList.push({
           id: `USR_${newH.id}`,
           username: newH.id.toLowerCase(),
@@ -293,8 +324,7 @@ export const HouseholdManagement: React.FC<HouseholdManagementProps> = ({
           role: 'HOUSEHOLD',
           householdId: newH.id,
           status: 'ACTIVE',
-          passwordHash: hHash,
-          salt: hSalt,
+          password: '123456',
           plainPasswordHint: '123456',
           createdAt: new Date().toISOString(),
         });
@@ -312,6 +342,7 @@ export const HouseholdManagement: React.FC<HouseholdManagementProps> = ({
       });
     }
 
+    GoogleSheetsService.triggerAutoSave(50);
     setIsModalOpen(false);
     if (onRefreshData) onRefreshData();
   };
@@ -465,6 +496,15 @@ export const HouseholdManagement: React.FC<HouseholdManagementProps> = ({
           {isAdmin && (
             <>
               <button
+                onClick={handleSyncFromSheets}
+                disabled={isSyncingSheets}
+                className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-all shadow-xs"
+                title="Đồng bộ 2 chiều: Nạp hộ chăn nuôi mới nhất từ Google Sheets về ứng dụng"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isSyncingSheets ? 'animate-spin' : ''}`} />
+                <span>{isSyncingSheets ? 'Đang đồng bộ...' : 'Đồng bộ từ Google Sheets'}</span>
+              </button>
+              <button
                 onClick={() => setIsExcelModalOpen(true)}
                 className="px-3.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-colors shadow-xs"
                 title="Nhập danh sách hộ chăn nuôi nhanh chóng từ file Excel (.xlsx, .xls, .csv)"
@@ -508,6 +548,28 @@ export const HouseholdManagement: React.FC<HouseholdManagementProps> = ({
           )}
         </div>
       </div>
+
+      {/* Sync Status Banner */}
+      {syncStatusMsg && (
+        <div
+          className={`p-3.5 rounded-2xl text-xs font-semibold flex items-center justify-between shadow-xs animate-in fade-in ${
+            syncStatusMsg.type === 'success'
+              ? 'bg-emerald-100 border border-emerald-300 text-emerald-900'
+              : 'bg-amber-100 border border-amber-300 text-amber-900'
+          }`}
+        >
+          <div className="flex items-center space-x-2">
+            <CheckCircle className="w-4 h-4 shrink-0 text-emerald-700" />
+            <span>{syncStatusMsg.text}</span>
+          </div>
+          <button
+            onClick={() => setSyncStatusMsg(null)}
+            className="p-1 rounded text-slate-500 hover:text-slate-800"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* Search & Filter Toolbar */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row gap-3">
