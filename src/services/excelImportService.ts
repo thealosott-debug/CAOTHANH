@@ -826,15 +826,10 @@ export class ExcelImportService {
     const householdMap = new Map<string, Household>();
     const bc01Map = new Map<string, BC01Record>();
 
-    if (mode === 'REPLACE') {
-      // Giữ lại Admin hiện tại
-      const currentAdmin = existingUsers.find(u => u.username === 'admin') || currentUser;
-      userMap.set(currentAdmin.username.toLowerCase(), currentAdmin);
-    } else {
-      existingUsers.forEach(u => userMap.set(u.username.toLowerCase(), u));
-      existingHouseholds.forEach(h => householdMap.set(h.id.toUpperCase(), h));
-      existingBC01.forEach(b => bc01Map.set(b.householdId.toUpperCase(), b));
-    }
+    // Luôn bảo toàn dữ liệu hiện có: Cập nhật hoặc thêm mới theo ID duy nhất, không xóa dữ liệu cũ
+    existingUsers.forEach(u => userMap.set(u.username.toLowerCase(), u));
+    existingHouseholds.forEach(h => householdMap.set(h.id.toUpperCase(), h));
+    existingBC01.forEach(b => bc01Map.set(b.householdId.toUpperCase(), b));
 
     // 1. Xử lý lưu Hộ chăn nuôi từ danh sách households
     for (const h of result.households.filter(h => h.isValid)) {

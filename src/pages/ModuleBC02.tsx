@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { BC02Record, KnowledgeAnswer, User } from '../types';
 import { StorageService } from '../services/storage';
+import { GoogleSheetsService } from '../services/googleSheets';
 import {
   ATTITUDE_STATEMENTS,
   KNOWLEDGE_QUESTIONS,
@@ -24,7 +25,7 @@ interface ModuleBC02Props {
 
 export const ModuleBC02: React.FC<ModuleBC02Props> = ({ currentUser, onRefreshData }) => {
   const households = StorageService.getHouseholds();
-  const [selectedHouseholdId, setSelectedHouseholdId] = useState<string>('H01');
+  const [selectedHouseholdId, setSelectedHouseholdId] = useState<string>(households[0]?.id || '');
 
   const bc02List = StorageService.getBC02List();
   const currentRecord = bc02List.find((b) => b.householdId === selectedHouseholdId);
@@ -105,7 +106,7 @@ export const ModuleBC02: React.FC<ModuleBC02Props> = ({ currentUser, onRefreshDa
     setSuccessMsg('');
   };
 
-  const handleSave = (lockAfter: boolean = false) => {
+  const handleSave = async (lockAfter: boolean = false) => {
     const list = StorageService.getBC02List();
     const existingIndex = list.findIndex((b) => b.householdId === selectedHouseholdId);
 
@@ -167,14 +168,16 @@ export const ModuleBC02: React.FC<ModuleBC02Props> = ({ currentUser, onRefreshDa
       }.`,
     });
 
-    setSuccessMsg(`Đã lưu khảo sát BC-02 Hộ ${selectedHouseholdId} thành công!`);
+    await GoogleSheetsService.saveAndSync();
+
+    setSuccessMsg(`Đã lưu khảo sát BC-02 Hộ ${selectedHouseholdId} lên Google Sheets thành công!`);
     setTimeout(() => {
       setSuccessMsg('');
       if (onRefreshData) onRefreshData();
     }, 2000);
   };
 
-  const handleUnlockConfirm = (reason: string) => {
+  const handleUnlockConfirm = async (reason: string) => {
     setIsLocked(false);
     setUnlockModalOpen(false);
 
@@ -196,6 +199,8 @@ export const ModuleBC02: React.FC<ModuleBC02Props> = ({ currentUser, onRefreshDa
       householdId: selectedHouseholdId,
       reason: `Mở khóa phiếu BC-02 KAP: ${reason}`,
     });
+
+    await GoogleSheetsService.saveAndSync();
 
     alert('Đã mở khóa phiếu BC-02.');
   };

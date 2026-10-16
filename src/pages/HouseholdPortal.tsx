@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { BC05Record, BC06Record, Household, User, WeekNumber } from '../types';
 import { StorageService } from '../services/storage';
+import { GoogleSheetsService } from '../services/googleSheets';
 import { COMMON_BARRIERS } from '../config/initialData';
 import { ChangePasswordModal } from '../components/ChangePasswordModal';
 
@@ -72,7 +73,7 @@ export const HouseholdPortal: React.FC<HouseholdPortalProps> = ({ user, onRefres
   );
 
   // Xử lý xác nhận cam kết xanh
-  const handleConfirmCommitment = () => {
+  const handleConfirmCommitment = async () => {
     const newRecord: BC05Record = {
       id: `BC05_${householdId}`,
       householdId,
@@ -106,6 +107,8 @@ export const HouseholdPortal: React.FC<HouseholdPortalProps> = ({ user, onRefres
       reason: `Hộ ${householdId} đã bấm ký xác nhận Cam kết xanh trực tuyến trên điện thoại.`,
     });
 
+    await GoogleSheetsService.saveAndSync();
+
     setCommitmentSuccess(true);
     setTimeout(() => {
       setCommitmentSuccess(false);
@@ -115,7 +118,7 @@ export const HouseholdPortal: React.FC<HouseholdPortalProps> = ({ user, onRefres
   };
 
   // Xử lý nộp báo cáo tuần
-  const handleSubmitWeekly = (e: React.FormEvent) => {
+  const handleSubmitWeekly = async (e: React.FormEvent) => {
     e.preventDefault();
 
     const score = Object.values(weeklyBehaviors).filter(Boolean).length;
@@ -163,7 +166,9 @@ export const HouseholdPortal: React.FC<HouseholdPortalProps> = ({ user, onRefres
       reason: `Hộ ${householdId} nộp báo cáo tuần ${selectedWeek} (Điểm hành vi: ${score}/6).`,
     });
 
-    setReportSuccessMsg(`Báo cáo tuần ${selectedWeek} đã được gửi thành công!`);
+    await GoogleSheetsService.saveAndSync();
+
+    setReportSuccessMsg(`Báo cáo tuần ${selectedWeek} đã được lưu thành công lên Google Sheets!`);
     setTimeout(() => {
       setReportSuccessMsg('');
       if (onRefreshData) onRefreshData();

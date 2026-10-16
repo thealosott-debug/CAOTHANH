@@ -255,8 +255,16 @@ export const AccountManagement: React.FC<AccountManagementProps> = ({
       ? (newAccountData.householdId.trim().toUpperCase() || cleanUsername.toUpperCase())
       : undefined;
 
+    let stableId = `HS_${cleanUsername.toUpperCase()}`;
+    if (role === 'ADMIN') stableId = `ADMIN_${cleanUsername.toUpperCase()}`;
+    else if (role === 'SUPERVISOR') stableId = `GV_${cleanUsername.toUpperCase()}`;
+    else if (role === 'HOUSEHOLD') stableId = `USR_${hid || cleanUsername.toUpperCase()}`;
+    if (users.some(u => u.id === stableId)) {
+      stableId = `${stableId}_${Date.now()}`;
+    }
+
     const newUser: User = {
-      id: `USR_${Date.now()}`,
+      id: stableId,
       username: cleanUsername,
       fullName: newAccountData.fullName.trim(),
       phone: newAccountData.phone.trim(),
@@ -333,8 +341,8 @@ export const AccountManagement: React.FC<AccountManagementProps> = ({
       StorageService.saveBC01List(updatedBC01);
     }
 
-    // 3. Đồng bộ lưu trữ vĩnh viễn lên Google Sheets ngay lập tức
-    GoogleSheetsService.triggerAutoSave(50);
+    // 3. Đồng bộ lưu trữ vĩnh viễn lên Google Sheets ngay lập tức và nạp lại để xác nhận
+    await GoogleSheetsService.saveAndSync();
 
     // 4. Ghi Audit Log
     StorageService.addAuditLog({
@@ -362,7 +370,7 @@ export const AccountManagement: React.FC<AccountManagementProps> = ({
   };
 
   // Khóa / Mở khóa tài khoản
-  const handleToggleStatus = (u: User) => {
+  const handleToggleStatus = async (u: User) => {
     const newStatus: AccountStatus = u.status === 'ACTIVE' ? 'LOCKED' : 'ACTIVE';
     const currentList = users.map((item) =>
       item.id === u.id ? { ...item, status: newStatus } : item
@@ -370,7 +378,7 @@ export const AccountManagement: React.FC<AccountManagementProps> = ({
 
     StorageService.saveUsers(currentList);
     setUsers(currentList);
-    GoogleSheetsService.triggerAutoSave(50);
+    await GoogleSheetsService.saveAndSync();
 
     StorageService.addAuditLog({
       userId: currentUser.id,
@@ -403,7 +411,7 @@ export const AccountManagement: React.FC<AccountManagementProps> = ({
 
     StorageService.saveUsers(currentList);
     setUsers(currentList);
-    GoogleSheetsService.triggerAutoSave(50);
+    await GoogleSheetsService.saveAndSync();
 
     if (currentUser.id === resetUser.id) {
       const updatedSelf = currentList.find((u) => u.id === currentUser.id);

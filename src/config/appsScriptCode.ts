@@ -29,11 +29,20 @@ var VIETNAMESE_SHEET_DEFS = {
   'TAI_KHOAN': {
     name: 'TAI_KHOAN',
     title: 'Danh sách Tổng hợp Toàn bộ Tài khoản (HDAN, GV, HS, Hộ dân, Quản trị)',
-    keyColIdx: 1, // Cột 2: TÊN ĐĂNG NHẬP
+    keyColIdx: 0, // Cột 1: MÃ TÀI KHOẢN
     headers: [
       'MÃ TÀI KHOẢN', 'TÊN ĐĂNG NHẬP', 'HỌ VÀ TÊN', 'VAI TRÒ', 'CHỨC VỤ / HỌC VỊ',
       'ĐƠN VỊ / ĐỊA CHỈ', 'SỐ ĐIỆN THOẠI', 'EMAIL', 'MÃ HỘ LIÊN KẾT', 'MẬT KHẨU',
       'TRẠNG THÁI', 'NGÀY TẠO', 'NGÀY CẬP NHẬT'
+    ]
+  },
+  'USERS': {
+    name: 'USERS',
+    title: 'Danh sách Users hệ thống',
+    keyColIdx: 0, // USER_ID
+    headers: [
+      'USER_ID', 'USERNAME', 'FULL_NAME', 'PHONE', 'ROLE', 'HOUSEHOLD_ID',
+      'STATUS', 'TITLE', 'ORGANIZATION', 'PASSWORD_HASH', 'SALT', 'DEFAULT_PASS', 'CREATED_AT'
     ]
   },
   'GIANG_VIEN': {
@@ -65,6 +74,103 @@ var VIETNAMESE_SHEET_DEFS = {
       'QUY MÔ ĐÀN (CON)', 'GIỐNG GÀ', 'HÌNH THỨC NUÔI', 'HỌC VIÊN PHỤ TRÁCH', 'GIẢNG VIÊN GIÁM SÁT', 
       'TÊN ĐĂNG NHẬP', 'MẬT KHẨU', 'TRẠNG THÁI', 'NGÀY VÀO ĐÀN', 'GHI CHÚ', 
       'NGÀY TẠO', 'NGÀY CẬP NHẬT'
+    ]
+  },
+  'HOUSEHOLDS': {
+    name: 'HOUSEHOLDS',
+    title: 'Danh sách Hộ chăn nuôi',
+    keyColIdx: 0,
+    headers: [
+      'HOUSEHOLD_ID', 'REPRESENTATIVE_NAME', 'PHONE', 'ADDRESS', 'LIVESTOCK_TYPE',
+      'HERD_SIZE', 'FARMING_YEARS', 'FARMING_TYPE', 'CURRENT_WASTE_METHOD', 'GROUP',
+      'STATUS', 'JOINED_DATE', 'RESEARCHER', 'NOTES', 'UPDATED_AT'
+    ]
+  },
+  'BC01_HO_THONG_TIN': {
+    name: 'BC01_HO_THONG_TIN',
+    title: 'Phiếu BC-01 Thông tin hộ chăn nuôi',
+    keyColIdx: 0,
+    headers: [
+      'RECORD_ID', 'HOUSEHOLD_ID', 'NAME', 'PHONE', 'ADDRESS', 'LIVESTOCK',
+      'HERD_SIZE', 'FARMING_YEARS', 'FARMING_TYPE', 'WASTE_METHOD', 'IS_LOCKED',
+      'CREATED_BY', 'CREATED_AT', 'UPDATED_AT', 'UPDATED_BY'
+    ]
+  },
+  'BC02_KAP_PRE': {
+    name: 'BC02_KAP_PRE',
+    title: 'Phiếu BC-02 Khảo sát KAP trước can thiệp',
+    keyColIdx: 0,
+    headers: [
+      'RECORD_ID', 'HOUSEHOLD_ID', 'SCORE_K_PRE', 'SCORE_T_PRE', 'SCORE_HT_PRE',
+      'B1_THU_GOM', 'B2_PHAN_LOAI', 'B3_LUU_CHUA', 'B4_KHONG_XA', 'B5_XU_LY', 'B6_VE_SINH',
+      'IS_LOCKED', 'SUBMITTED_BY', 'SUBMITTED_AT'
+    ]
+  },
+  'BC03_YDINH': {
+    name: 'BC03_YDINH',
+    title: 'Phiếu BC-03 Ý định thay đổi',
+    keyColIdx: 0,
+    headers: [
+      'RECORD_ID', 'HOUSEHOLD_ID', 'SCORE_YD_PRE', 'YD01_Y_DINH', 'YD02_SAN_SANG',
+      'YD03_NIEM_TIN', 'YD04_TRACH_NHIEM', 'YD05_DUY_TRI', 'IS_LOCKED', 'SUBMITTED_BY', 'SUBMITTED_AT'
+    ]
+  },
+  'BC04_CWM_PRE': {
+    name: 'BC04_CWM_PRE',
+    title: 'Phiếu BC-04 Quan sát CWM Trước can thiệp',
+    keyColIdx: 0,
+    headers: [
+      'RECORD_ID', 'HOUSEHOLD_ID', 'SCORE_CWM_PRE', 'B1_THU_GOM', 'B2_PHAN_LOAI',
+      'B3_LUU_CHUA', 'B4_KHONG_XA', 'B5_XU_LY', 'B6_VE_SINH', 'NOTES', 'EVIDENCE',
+      'FAILURE_REASONS', 'OBSERVED_BY', 'OBSERVED_AT', 'IS_LOCKED'
+    ]
+  },
+  'BC04_CWM_POST': {
+    name: 'BC04_CWM_POST',
+    title: 'Phiếu BC-04 Quan sát CWM Sau can thiệp',
+    keyColIdx: 0,
+    headers: [
+      'RECORD_ID', 'HOUSEHOLD_ID', 'SCORE_CWM_POST', 'B1_THU_GOM', 'B2_PHAN_LOAI',
+      'B3_LUU_CHUA', 'B4_KHONG_XA', 'B5_XU_LY', 'B6_VE_SINH', 'NOTES', 'EVIDENCE',
+      'FAILURE_REASONS', 'OBSERVED_BY', 'OBSERVED_AT', 'IS_LOCKED'
+    ]
+  },
+  'BC05_CAM_KET': {
+    name: 'BC05_CAM_KET',
+    title: 'Phiếu BC-05 Cam kết xanh',
+    keyColIdx: 0,
+    headers: [
+      'RECORD_ID', 'HOUSEHOLD_ID', 'B1_THU_GOM', 'B2_PHAN_LOAI', 'B3_LUU_CHUA',
+      'B4_KHONG_XA', 'B5_XU_LY', 'B6_VE_SINH', 'B7_BAO_CAO_TUAN', 'CONFIRMED',
+      'CONFIRMED_BY', 'CONFIRMED_AT', 'VERSION'
+    ]
+  },
+  'BC06_WEEKLY': {
+    name: 'BC06_WEEKLY',
+    title: 'Phiếu BC-06 Báo cáo theo dõi hằng tuần',
+    keyColIdx: 0,
+    headers: [
+      'RECORD_ID', 'HOUSEHOLD_ID', 'WEEK', 'WEEKLY_SCORE', 'B1', 'B2', 'B3', 'B4', 'B5', 'B6',
+      'BARRIERS', 'OTHER_BARRIERS', 'SUBMITTED_BY', 'SUBMITTED_AT'
+    ]
+  },
+  'BC07_POST': {
+    name: 'BC07_POST',
+    title: 'Phiếu BC-07 Khảo sát sau can thiệp',
+    keyColIdx: 0,
+    headers: [
+      'RECORD_ID', 'HOUSEHOLD_ID', 'SCORE_HT_POST', 'B1_THU_GOM', 'B2_PHAN_LOAI',
+      'B3_LUU_CHUA', 'B4_KHONG_XA', 'B5_XU_LY', 'B6_VE_SINH', 'MAINTENANCE_WILLINGNESS',
+      'FEEDBACK', 'REMAINING_BARRIERS', 'IS_LOCKED', 'SUBMITTED_BY', 'SUBMITTED_AT'
+    ]
+  },
+  'BC08_TONG_HOP': {
+    name: 'BC08_TONG_HOP',
+    title: 'Bảng BC-08 Tổng hợp dữ liệu đề tài',
+    keyColIdx: 0,
+    headers: [
+      'HOUSEHOLD_ID', 'REPRESENTATIVE_NAME', 'GROUP', 'K_PRE', 'T_PRE', 'YD_PRE',
+      'HT_PRE', 'CWM_PRE', 'HT_POST', 'CWM_POST', 'DELTA_CWM', 'W1', 'W2', 'W3', 'W4', 'W5', 'W6', 'STATUS'
     ]
   },
   'NHAT_KY_CHAN_NUOI': {
@@ -194,10 +300,10 @@ function doPost(e) {
     }
 
     if (action === 'INIT_SHEETS') {
-      khoiTaoDuLieuMauTiengViet(spreadsheet);
+      ensureVietnameseSheets(spreadsheet);
       return jsonResponse({
         status: 'success',
-        message: 'Đã khởi tạo thành công toàn bộ các bảng tính chăn nuôi Tiếng Việt chuẩn mực!'
+        message: 'Đã khởi tạo thành công cấu trúc toàn bộ các bảng tính Tiếng Việt trên Google Sheets!'
       });
     }
 
@@ -274,13 +380,15 @@ function upsertSheetDataPermanently(sheet, incomingRows, keyColIdx) {
     }
   }
 
-  var startIncomingIdx = (incomingRows.length > 1 && String(incomingRows[0][keyColIdx] || '').toUpperCase().includes('MÃ')) ? 1 : 0;
+  var startIncomingIdx = incomingRows.length > 1 ? 1 : 0;
   var rowsToAppend = [];
 
   for (var i = startIncomingIdx; i < incomingRows.length; i++) {
     var inRow = incomingRows[i];
     var inKey = String(inRow[keyColIdx] || '').trim().toUpperCase();
     if (!inKey) continue;
+    // Bỏ qua nếu dòng dữ liệu vô tình là dòng tiêu đề
+    if (inKey === 'USER_ID' || inKey === 'HOUSEHOLD_ID' || inKey === 'RECORD_ID' || inKey === 'LOG_ID' || inKey === 'KEY' || inKey === 'KHÓA' || inKey === 'MÃ HỘ' || inKey === 'MÃ TÀI KHOẢN' || inKey === 'MÃ GIẢNG VIÊN' || inKey === 'MÃ HỌC VIÊN') continue;
 
     var cleanRow = [];
     for (var c = 0; c < lastCol; c++) {
@@ -346,40 +454,5 @@ function exportFullSpreadsheetData(spreadsheet) {
 function jsonResponse(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);
-}
-
-function khoiTaoDuLieuMauTiengViet() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  ensureVietnameseSheets(ss);
-
-  var gvSheet = ss.getSheetByName('GIANG_VIEN');
-  if (gvSheet && gvSheet.getLastRow() <= 1) {
-    gvSheet.appendRow([
-      'GV01', 'PGS.TS. Nguyễn Văn A', '0912345678', 'admin@greenfarm.edu.vn', 'Khoa Chăn nuôi',
-      'Chủ nhiệm đề tài', 'admin', '123456', 'QUẢN TRỊ VIÊN', 'HOẠT ĐỘNG',
-      new Date().toISOString(), new Date().toISOString(), 'Tài khoản quản trị viên tối cao'
-    ]);
-    gvSheet.appendRow([
-      'GV02', 'TS. Trần Thị B', '0987654321', 'giangvien@greenfarm.edu.vn', 'Bộ môn Thú y',
-      'Cán bộ hướng dẫn', 'gv01', '123456', 'GIẢNG VIÊN', 'HOẠT ĐỘNG',
-      new Date().toISOString(), new Date().toISOString(), 'Giảng viên hướng dẫn thực địa'
-    ]);
-  }
-
-  var hvSheet = ss.getSheetByName('HOC_VIEN');
-  if (hvSheet && hvSheet.getLastRow() <= 1) {
-    hvSheet.appendRow([
-      'HV01', 'Lê Văn C', 'Lớp Thú y K65', '0901112233', 'hs01@greenfarm.edu.vn',
-      'H01, H02', 'hs01', '123456', 'HỌC VIÊN', 'HOẠT ĐỘNG',
-      '2026-09-01', 'Phụ trách địa bàn Thôn 1', new Date().toISOString(), new Date().toISOString()
-    ]);
-    hvSheet.appendRow([
-      'HV02', 'Phạm Thị D', 'Lớp Chăn nuôi K66', '0904445566', 'hs02@greenfarm.edu.vn',
-      'H03, H04', 'hs02', '123456', 'HỌC VIÊN', 'HOẠT ĐỘNG',
-      '2026-09-01', 'Phụ trách địa bàn Thôn 2', new Date().toISOString(), new Date().toISOString()
-    ]);
-  }
-
-  Logger.log('Đã khởi tạo dữ liệu mẫu tiếng Việt thành công!');
 }
 `;

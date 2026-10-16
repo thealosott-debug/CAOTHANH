@@ -26,6 +26,7 @@ export interface User {
   plainPasswordHint?: string; // Mật khẩu đăng nhập (mặc định 123456)
   passwordHash?: string;
   salt?: string;
+  notes?: string;
   createdAt: string;
   lastLogin?: string;
 }

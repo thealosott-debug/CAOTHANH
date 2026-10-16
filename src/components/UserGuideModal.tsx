@@ -312,7 +312,7 @@ export const UserGuideModal: React.FC<UserGuideModalProps> = ({
                     </div>
                   </div>
                   <div className="space-y-2 text-xs text-slate-600">
-                    <p><strong>Tài khoản mặc định:</strong> <code>admin</code> / Mật khẩu: <code>admin123</code></p>
+                    <p><strong>Quản trị viên:</strong> Tài khoản Admin được quản lý và nạp trực tiếp từ Google Sheets (bảng TAI_KHOAN / USERS).</p>
                     <ul className="list-disc list-inside space-y-1 text-slate-700">
                       <li>Xem toàn cảnh <strong>Dashboard Nghiên cứu</strong> (Tiến độ 40 hộ, Biểu đồ CWM, Phân tích rào cản).</li>
                       <li>Vào mục <strong>Cài đặt hệ thống</strong> để tải file mẫu Excel và nạp danh sách Hộ / Cán bộ nghiên cứu.</li>
@@ -579,9 +579,9 @@ export const UserGuideModal: React.FC<UserGuideModalProps> = ({
                   <span>Tài khoản và mật khẩu mặc định của các đối tượng là gì?</span>
                 </h5>
                 <div className="text-xs text-slate-600 pl-6 space-y-1">
-                  <p>• <strong>Quản trị viên (Admin):</strong> Tên đăng nhập <code>admin</code> / Mật khẩu: <code>admin123</code></p>
-                  <p>• <strong>Hộ chăn nuôi:</strong> Tên đăng nhập là mã hộ viết thường (ví dụ: <code>h01</code>, <code>h02</code>...) hoặc Số điện thoại của hộ / Mật khẩu mặc định: <code>123456</code></p>
-                  <p>• <strong>Nghiên cứu viên:</strong> Do Admin tạo trong mục Quản lý tài khoản hoặc nạp từ file Excel / Mật khẩu mặc định: <code>123456</code></p>
+                  <p>• <strong>Quản trị viên (Admin):</strong> Nạp trực tiếp từ Google Sheets hoặc cấp phát bởi Quản trị viên.</p>
+                  <p>• <strong>Hộ chăn nuôi:</strong> Tên đăng nhập là mã hộ viết thường (ví dụ: <code>h01</code>, <code>h02</code>...) hoặc Số điện thoại của hộ.</p>
+                  <p>• <strong>Cán bộ & Học viên:</strong> Cấp trong mục Quản lý cán bộ hoặc nạp từ Google Sheets.</p>
                 </div>
               </div>
 

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { CheckSquare, Save, Lock, Unlock, AlertTriangle } from 'lucide-react';
 import { BC03Record, User } from '../types';
 import { StorageService } from '../services/storage';
+import { GoogleSheetsService } from '../services/googleSheets';
 import { INTENTION_QUESTIONS } from '../config/initialData';
 import { UnlockModal } from '../components/UnlockModal';
 
@@ -12,7 +13,7 @@ interface ModuleBC03Props {
 
 export const ModuleBC03: React.FC<ModuleBC03Props> = ({ currentUser, onRefreshData }) => {
   const households = StorageService.getHouseholds();
-  const [selectedHouseholdId, setSelectedHouseholdId] = useState<string>('H01');
+  const [selectedHouseholdId, setSelectedHouseholdId] = useState<string>(households[0]?.id || '');
 
   const bc03List = StorageService.getBC03List();
   const currentRecord = bc03List.find((b) => b.householdId === selectedHouseholdId);
@@ -47,7 +48,7 @@ export const ModuleBC03: React.FC<ModuleBC03Props> = ({ currentUser, onRefreshDa
     setMessage('');
   };
 
-  const handleSave = (lockAfter: boolean = false) => {
+  const handleSave = async (lockAfter: boolean = false) => {
     const list = StorageService.getBC03List();
     const existingIndex = list.findIndex((b) => b.householdId === selectedHouseholdId);
 
@@ -86,14 +87,16 @@ export const ModuleBC03: React.FC<ModuleBC03Props> = ({ currentUser, onRefreshDa
       }.`,
     });
 
-    setMessage(`Đã lưu thành công phiếu BC-03 Hộ ${selectedHouseholdId}!`);
+    await GoogleSheetsService.saveAndSync();
+
+    setMessage(`Đã lưu thành công phiếu BC-03 Hộ ${selectedHouseholdId} lên Google Sheets!`);
     setTimeout(() => {
       setMessage('');
       if (onRefreshData) onRefreshData();
     }, 2000);
   };
 
-  const handleUnlockConfirm = (reason: string) => {
+  const handleUnlockConfirm = async (reason: string) => {
     setIsLocked(false);
     setUnlockModalOpen(false);
 
@@ -115,6 +118,8 @@ export const ModuleBC03: React.FC<ModuleBC03Props> = ({ currentUser, onRefreshDa
       householdId: selectedHouseholdId,
       reason: `Mở khóa phiếu BC-03: ${reason}`,
     });
+
+    await GoogleSheetsService.saveAndSync();
 
     alert('Đã mở khóa phiếu BC-03.');
   };

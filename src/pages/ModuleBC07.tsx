@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { BC07Record, User } from '../types';
 import { StorageService } from '../services/storage';
+import { GoogleSheetsService } from '../services/googleSheets';
 import { COMMON_BARRIERS } from '../config/initialData';
 import { UnlockModal } from '../components/UnlockModal';
 
@@ -88,7 +89,7 @@ export const ModuleBC07: React.FC<ModuleBC07Props> = ({ currentUser, onRefreshDa
     }
   };
 
-  const handleSave = (lockAfter: boolean = false) => {
+  const handleSave = async (lockAfter: boolean = false) => {
     const list = StorageService.getBC07List();
     const existingIndex = list.findIndex((b) => b.householdId === selectedHouseholdId);
 
@@ -135,14 +136,16 @@ export const ModuleBC07: React.FC<ModuleBC07Props> = ({ currentUser, onRefreshDa
       }.`,
     });
 
-    setMessage(`Đã lưu thành công khảo sát sau can thiệp Hộ ${selectedHouseholdId}!`);
+    await GoogleSheetsService.saveAndSync();
+
+    setMessage(`Đã lưu thành công khảo sát sau can thiệp Hộ ${selectedHouseholdId} lên Google Sheets!`);
     setTimeout(() => {
       setMessage('');
       if (onRefreshData) onRefreshData();
     }, 2000);
   };
 
-  const handleUnlockConfirm = (reason: string) => {
+  const handleUnlockConfirm = async (reason: string) => {
     setIsLocked(false);
     setUnlockModalOpen(false);
 
@@ -164,6 +167,8 @@ export const ModuleBC07: React.FC<ModuleBC07Props> = ({ currentUser, onRefreshDa
       householdId: selectedHouseholdId,
       reason: `Mở khóa phiếu BC-07: ${reason}`,
     });
+
+    await GoogleSheetsService.saveAndSync();
 
     alert('Đã mở khóa phiếu BC-07.');
   };

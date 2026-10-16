@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { BC06Record, Household, User, WeekNumber } from '../types';
 import { StorageService } from '../services/storage';
+import { GoogleSheetsService } from '../services/googleSheets';
 import { COMMON_BARRIERS } from '../config/initialData';
 
 interface ModuleBC06Props {
@@ -84,7 +85,7 @@ export const ModuleBC06: React.FC<ModuleBC06Props> = ({ currentUser, onRefreshDa
     }
   };
 
-  const handleSaveReport = (e: React.FormEvent) => {
+  const handleSaveReport = async (e: React.FormEvent) => {
     e.preventDefault();
 
     const list = StorageService.getBC06List();
@@ -132,7 +133,9 @@ export const ModuleBC06: React.FC<ModuleBC06Props> = ({ currentUser, onRefreshDa
       reason: `Nộp/cập nhật báo cáo tuần ${selectedWeek} của hộ ${selectedHouseholdId} (Điểm: ${calculatedWeeklyScore}/6).`,
     });
 
-    setMessage(`Đã lưu thành công báo cáo tuần ${selectedWeek} cho hộ ${selectedHouseholdId}!`);
+    await GoogleSheetsService.saveAndSync();
+
+    setMessage(`Đã lưu thành công báo cáo tuần ${selectedWeek} cho hộ ${selectedHouseholdId} lên Google Sheets!`);
     setTimeout(() => {
       setMessage('');
       if (onRefreshData) onRefreshData();

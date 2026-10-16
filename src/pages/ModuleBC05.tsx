@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Sparkles, CheckCircle, ShieldCheck, Clock, Users, Check, AlertCircle } from 'lucide-react';
 import { BC05Record, User } from '../types';
 import { StorageService } from '../services/storage';
+import { GoogleSheetsService } from '../services/googleSheets';
 
 interface ModuleBC05Props {
   currentUser: User;
@@ -19,7 +20,7 @@ export const ModuleBC05: React.FC<ModuleBC05Props> = ({ currentUser, onRefreshDa
 
   const [message, setMessage] = useState('');
 
-  const handleConfirmForHousehold = () => {
+  const handleConfirmForHousehold = async () => {
     const list = StorageService.getBC05List().filter((b) => b.householdId !== selectedHouseholdId);
     const newRecord: BC05Record = {
       id: `BC05_${selectedHouseholdId}`,
@@ -53,7 +54,9 @@ export const ModuleBC05: React.FC<ModuleBC05Props> = ({ currentUser, onRefreshDa
       reason: `Nghiên cứu viên / Admin xác nhận Cam kết xanh cho hộ ${selectedHouseholdId}.`,
     });
 
-    setMessage(`Đã xác nhận Cam kết xanh cho hộ ${selectedHouseholdId}!`);
+    await GoogleSheetsService.saveAndSync();
+
+    setMessage(`Đã xác nhận Cam kết xanh cho hộ ${selectedHouseholdId} và đồng bộ Google Sheets!`);
     setTimeout(() => {
       setMessage('');
       if (onRefreshData) onRefreshData();

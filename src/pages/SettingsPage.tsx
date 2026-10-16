@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { ResearchConfig, User } from '../types';
 import { StorageService } from '../services/storage';
+import { GoogleSheetsService } from '../services/googleSheets';
 import { ExcelImportModal, ImportTab } from '../components/ExcelImportModal';
 import { ExcelImportService } from '../services/excelImportService';
 
@@ -31,7 +32,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser, onRefre
   const [isExcelModalOpen, setIsExcelModalOpen] = useState(false);
   const [modalTab, setModalTab] = useState<ImportTab>('HOUSEHOLDS');
 
-  const handleSaveConfig = (e: React.FormEvent) => {
+  const handleSaveConfig = async (e: React.FormEvent) => {
     e.preventDefault();
     StorageService.saveConfig(config);
     StorageService.addAuditLog({
@@ -42,47 +43,31 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser, onRefre
       targetModule: 'CONFIG',
       reason: 'Cập nhật tham số cấu hình hệ thống nghiên cứu.',
     });
-    setSaveMsg('Đã lưu cấu hình nghiên cứu thành công!');
+    await GoogleSheetsService.saveAndSync();
+    setSaveMsg('Đã lưu cấu hình nghiên cứu và đồng bộ Google Sheets thành công!');
     setTimeout(() => {
       setSaveMsg('');
       if (onRefreshData) onRefreshData();
     }, 2000);
   };
 
-  const handleResetDemoData = async () => {
-    const confirmReset = window.confirm(
-      'BẠN CÓ CHẮC CHẮN MUỐN NẠP LẠI BỘ DỮ LIỆU DEMO 40 HỘ?\n\n- Toàn bộ hồ sơ 40 hộ chuẩn (20 TN, 20 ĐC) cùng khảo sát KAP, quan sát CWM và 6 tuần theo dõi mẫu sẽ được tái lập.\n- Thao tác này rất thuận tiện cho việc trình diễn và nghiệm thu đề tài.'
-    );
-    if (!confirmReset) return;
-
-    await StorageService.resetToDemoData();
-    alert('Đã nạp lại bộ dữ liệu DEMO 40 hộ chuẩn thành công!');
+  const handlePullAllFromSheets = async () => {
+    const res = await GoogleSheetsService.pullFromGoogleSheets();
+    if (res.success) {
+      alert('Đã đồng bộ toàn bộ dữ liệu từ Google Sheets về ứng dụng thành công!');
+    } else {
+      alert(`Lỗi đồng bộ: ${res.message}`);
+    }
     if (onRefreshData) onRefreshData();
   };
 
-  const handleClearResearchData = () => {
-    const confirmClear = window.confirm(
-      'CẢNH BÁO QUAN TRỌNG!\n\nBạn sắp xóa sạch toàn bộ dữ liệu khảo sát (BC01-BC07) để chuẩn bị thu thập dữ liệu thực địa mới.\nDanh sách các hộ và tài khoản vẫn được giữ nguyên.\n\nBạn có chắc chắn muốn thực hiện?'
-    );
-    if (!confirmClear) return;
-
-    StorageService.clearResearchData();
-    alert('Đã xóa sạch dữ liệu nghiên cứu để bắt đầu khảo sát mới!');
-    if (onRefreshData) onRefreshData();
-  };
-
-  const handleResetCleanAll = async () => {
-    const confirmClean = window.confirm(
-      'XÁC NHẬN XÓA TOÀN BỘ DỮ LIỆU NỀN MẪU:\n\n' +
-      '• Xóa sạch danh sách hộ kinh doanh, người nghiên cứu, các phiếu khảo sát.\n' +
-      '• Đưa toàn bộ hệ thống về trạng thái sạch 100% để bạn tự nhập dữ liệu thực tế.\n' +
-      '• Chỉ giữ lại tài khoản Quản trị viên (admin / admin123) để đăng nhập.\n\n' +
-      'Bạn có chắc chắn muốn thực hiện?'
-    );
-    if (!confirmClean) return;
-
-    await StorageService.resetToCleanState();
-    alert('Đã xóa toàn bộ dữ liệu nền mẫu thành công! Ứng dụng đã sẵn sàng nhận dữ liệu thực tế.');
+  const handleFullSyncToSheets = async () => {
+    const res = await GoogleSheetsService.saveAndSync();
+    if (res.success) {
+      alert('Đã lưu và đồng bộ toàn bộ dữ liệu lên Google Sheets thành công!');
+    } else {
+      alert(`Thông báo đồng bộ: ${res.message}`);
+    }
     if (onRefreshData) onRefreshData();
   };
 
@@ -97,7 +82,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser, onRefre
           </h1>
         </div>
         <p className="text-xs text-slate-500 mt-1">
-          Cấu hình tham số nghiên cứu theo đề cương • Quản lý bộ dữ liệu mẫu (DEMO) và dữ liệu thực địa
+          Cấu hình tham số nghiên cứu theo đề cương • Quản lý tham số và đồng bộ Google Sheets
         </p>
       </div>
 
@@ -353,72 +338,53 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser, onRefre
         </div>
       </div>
 
-      {/* 3. Quản lý Dữ liệu Mẫu (Demo Data) & Làm sạch */}
+      {/* 3. Nguồn Dữ liệu Google Sheets & Làm sạch */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 space-y-4">
         <h2 className="text-base font-extrabold text-slate-900 uppercase border-b border-slate-100 pb-3 flex items-center space-x-2">
           <Database className="w-5 h-5 text-emerald-700" />
-          <span>3. QUẢN LÝ BỘ DỮ LIỆU MẪU &amp; LÀM SẠCH CƠ SỞ DỮ LIỆU</span>
+          <span>3. ĐỒNG BỘ DỮ LIỆU TỪ GOOGLE SHEETS (DATABASE CHÍNH)</span>
         </h2>
 
         <p className="text-xs text-slate-600">
-          Hệ thống cung cấp sẵn bộ dữ liệu giả lập 40 hộ chuẩn (H01-H40, 20 TN, 20 ĐC) được tính toán theo quy luật thực nghiệm để kiểm tra toàn bộ dashboard, biểu đồ và bảng tổng hợp BC-08.
+          Google Sheets là nguồn dữ liệu duy nhất và chính thức của hệ thống. Ứng dụng đọc, hiển thị và ghi nhận dữ liệu trực tiếp 2 chiều với Google Sheets.
         </p>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
           <div className="p-4 bg-emerald-50/70 border border-emerald-200 rounded-2xl space-y-3 flex flex-col justify-between">
             <div>
               <div className="font-extrabold text-xs text-emerald-950 flex items-center space-x-1.5">
                 <RotateCcw className="w-4 h-4 text-emerald-700" />
-                <span>NẠP LẠI DỮ LIỆU DEMO 40 HỘ</span>
+                <span>NẠP TOÀN BỘ TỪ GOOGLE SHEETS</span>
               </div>
               <p className="text-xs text-slate-600 mt-2">
-                Khôi phục lại dữ liệu mẫu đầy đủ để chạy thử nghiệm các tính năng.
+                Tải lại toàn bộ dữ liệu mới nhất (tài khoản, hộ chăn nuôi, các phiếu khảo sát BC01-BC08) từ Google Sheets.
               </p>
             </div>
             <button
               type="button"
-              onClick={handleResetDemoData}
+              onClick={handlePullAllFromSheets}
               className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold transition-colors shadow-xs w-full"
             >
-              Nạp lại dữ liệu DEMO
+              Nạp toàn bộ từ Google Sheets
             </button>
           </div>
 
-          <div className="p-4 bg-amber-50/70 border border-amber-200 rounded-2xl space-y-3 flex flex-col justify-between">
+          <div className="p-4 bg-emerald-50/70 border border-emerald-200 rounded-2xl space-y-3 flex flex-col justify-between">
             <div>
-              <div className="font-extrabold text-xs text-amber-950 flex items-center space-x-1.5">
-                <Trash2 className="w-4 h-4 text-amber-700" />
-                <span>LÀM SẠCH PHIẾU KHẢO SÁT</span>
+              <div className="font-extrabold text-xs text-emerald-950 flex items-center space-x-1.5">
+                <Database className="w-4 h-4 text-emerald-700" />
+                <span>ĐỒNG BỘ TOÀN DIỆN LÊN GOOGLE SHEETS</span>
               </div>
               <p className="text-xs text-slate-600 mt-2">
-                Xóa sạch các bản ghi khảo sát BC01-BC07, vẫn giữ lại danh sách hộ và tài khoản.
+                Đẩy dữ liệu hiện tại lên Google Sheets và tải lại để xác nhận nguồn dữ liệu chính xác 100%.
               </p>
             </div>
             <button
               type="button"
-              onClick={handleClearResearchData}
-              className="px-4 py-2 bg-amber-700 hover:bg-amber-800 text-white rounded-xl text-xs font-bold transition-colors shadow-xs w-full"
+              onClick={handleFullSyncToSheets}
+              className="px-4 py-2 bg-emerald-800 hover:bg-emerald-900 text-white rounded-xl text-xs font-bold transition-colors shadow-xs w-full"
             >
-              Làm sạch khảo sát
-            </button>
-          </div>
-
-          <div className="p-4 bg-red-50/80 border-2 border-red-300 rounded-2xl space-y-3 flex flex-col justify-between">
-            <div>
-              <div className="font-extrabold text-xs text-red-950 flex items-center space-x-1.5">
-                <Trash2 className="w-4 h-4 text-red-700" />
-                <span>XÓA SẠCH TOÀN BỘ (NHẬP MỚI 100%)</span>
-              </div>
-              <p className="text-xs text-slate-600 mt-2">
-                Xóa toàn bộ hộ kinh doanh, người nghiên cứu và khảo sát. Chỉ giữ tài khoản Admin để nhập dữ liệu thực tế.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={handleResetCleanAll}
-              className="px-4 py-2 bg-red-700 hover:bg-red-800 text-white rounded-xl text-xs font-bold transition-colors shadow-xs w-full"
-            >
-              Xóa sạch dữ liệu nền
+              Đồng bộ lên Google Sheets
             </button>
           </div>
         </div>

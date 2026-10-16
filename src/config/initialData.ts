@@ -241,22 +241,8 @@ export const COMMON_BARRIERS = [
   { id: 'B_WEATHER', label: 'Thời tiết mưa bão gây ngập úng tràn phân' }
 ];
 
-// Dữ liệu tài khoản quản trị viên duy nhất ban đầu
-export const DEFAULT_USERS: User[] = [
-  {
-    id: 'USR_ADMIN_01',
-    username: 'admin',
-    fullName: 'Quản trị viên (Chủ nhiệm đề tài)',
-    email: 'admin@research.vn',
-    phone: '',
-    role: 'ADMIN',
-    status: 'ACTIVE',
-    passwordHash: '', // Sẽ được tính với salt khi khởi tạo
-    salt: 'SALT_ADMIN_999',
-    plainPasswordHint: '123456',
-    createdAt: new Date().toISOString(),
-  }
-];
+// Không hard-code tài khoản mặc định, toàn bộ tài khoản được nạp từ Google Sheets
+export const DEFAULT_USERS: User[] = [];
 
 // Danh sách hộ chăn nuôi ban đầu: Để trống hoàn toàn để nhập dữ liệu thực tế
 export function generateInitialHouseholds(): Household[] {

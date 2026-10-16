@@ -24,6 +24,7 @@ import {
   Database,
   ExternalLink,
   RefreshCw,
+  Trash2,
 } from 'lucide-react';
 import { StorageService } from '../services/storage';
 import { GoogleSheetsService } from '../services/googleSheets';
@@ -149,6 +150,24 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess, onOpenCwmGuide }) 
     } finally {
       setIsSyncing(false);
     }
+  };
+
+  const handleClearDemoData = () => {
+    const confirmed = window.confirm(
+      'XÁC NHẬN XÓA SẠCH DỮ LIỆU DEMO CỤC BỘ TRÊN ỨNG DỤNG?\n\n' +
+      '• Toàn bộ tài khoản demo, hộ dân demo và khảo sát lưu trong bộ nhớ máy sẽ bị xóa sạch.\n' +
+      '• Sau khi xóa, bạn chỉ cần điền thông tin và số liệu thực tế trên Google Sheets, rồi bấm "ĐỒNG BỘ TÀI KHOẢN TỪ GOOGLE SHEETS" để nạp vào App.'
+    );
+    if (!confirmed) return;
+
+    StorageService.resetToCleanState();
+    setUsername('');
+    setPassword('');
+    setError('');
+    setSyncNotice({
+      type: 'success',
+      message: 'Đã xóa sạch toàn bộ dữ liệu demo! Hãy nhập dữ liệu trên Google Sheets rồi bấm nút Đồng bộ.',
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -455,50 +474,73 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess, onOpenCwmGuide }) 
 
                   {showAccountList && (
                     <div className="mt-2 p-3 bg-slate-900/95 border border-slate-700 rounded-2xl space-y-2 text-xs max-h-60 overflow-y-auto">
-                      <div className="text-[11px] text-emerald-300 font-semibold border-b border-slate-700 pb-1 flex justify-between">
-                        <span>Tài khoản hiện có (Mật khẩu mặc định: 123456)</span>
+                      <div className="text-[11px] text-emerald-300 font-semibold border-b border-slate-700 pb-1 flex justify-between items-center">
+                        <span>Tài khoản hiện có (Mật khẩu: 123456)</span>
                         <span className="text-slate-400">{StorageService.getUsers().length} tài khoản</span>
                       </div>
-                      <div className="space-y-1.5">
-                        {StorageService.getUsers().map((u) => (
-                          <div
-                            key={u.id}
-                            onClick={() => {
-                              setUsername(u.username);
-                              setPassword(u.plainPasswordHint || '123456');
-                            }}
-                            className="p-2 rounded-xl bg-slate-800/80 hover:bg-emerald-950/60 border border-slate-700/60 hover:border-emerald-600/60 flex items-center justify-between cursor-pointer transition-all"
-                          >
-                            <div className="space-y-0.5">
-                              <div className="font-bold text-white flex items-center space-x-1.5">
-                                <span className="text-emerald-400 font-mono">{u.username}</span>
-                                <span className="text-slate-300 text-[11px]">({u.fullName})</span>
-                              </div>
-                              <div className="text-[10px] text-slate-400 flex items-center space-x-2">
-                                <span>
-                                  Vai trò:{' '}
-                                  <strong className="text-teal-300 font-semibold">
-                                    {u.role === 'ADMIN'
-                                      ? 'Admin'
-                                      : u.role === 'SUPERVISOR'
-                                      ? 'Người hướng dẫn'
-                                      : u.role === 'RESEARCHER'
-                                      ? 'Học viên'
-                                      : 'Hộ chăn nuôi'}
-                                  </strong>
-                                </span>
-                                {u.phone && <span>• SĐT: {u.phone}</span>}
-                              </div>
-                            </div>
-                            <button
-                              type="button"
-                              className="px-2.5 py-1 bg-emerald-600/40 hover:bg-emerald-600 text-emerald-200 hover:text-white rounded-lg text-[10px] font-bold border border-emerald-500/40 shrink-0"
+
+                      {StorageService.getUsers().length === 0 ? (
+                        <div className="py-4 text-center text-slate-400 space-y-1">
+                          <p className="font-semibold text-slate-300">Chưa có tài khoản nào trong bộ nhớ.</p>
+                          <p className="text-[11px] text-slate-500">
+                            Hãy nhập thông tin tài khoản trên Google Sheets, sau đó bấm nút "ĐỒNG BỘ TÀI KHOẢN TỪ GOOGLE SHEETS" ở trên.
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="space-y-1.5">
+                          {StorageService.getUsers().map((u) => (
+                            <div
+                              key={u.id}
+                              onClick={() => {
+                                setUsername(u.username);
+                                setPassword(u.plainPasswordHint || '123456');
+                              }}
+                              className="p-2 rounded-xl bg-slate-800/80 hover:bg-emerald-950/60 border border-slate-700/60 hover:border-emerald-600/60 flex items-center justify-between cursor-pointer transition-all"
                             >
-                              Chọn
-                            </button>
-                          </div>
-                        ))}
-                      </div>
+                              <div className="space-y-0.5">
+                                <div className="font-bold text-white flex items-center space-x-1.5">
+                                  <span className="text-emerald-400 font-mono">{u.username}</span>
+                                  <span className="text-slate-300 text-[11px]">({u.fullName})</span>
+                                </div>
+                                <div className="text-[10px] text-slate-400 flex items-center space-x-2">
+                                  <span>
+                                    Vai trò:{' '}
+                                    <strong className="text-teal-300 font-semibold">
+                                      {u.role === 'ADMIN'
+                                        ? 'Admin'
+                                        : u.role === 'SUPERVISOR'
+                                        ? 'Người hướng dẫn'
+                                        : u.role === 'RESEARCHER'
+                                        ? 'Học viên'
+                                        : 'Hộ chăn nuôi'}
+                                    </strong>
+                                  </span>
+                                  {u.phone && <span>• SĐT: {u.phone}</span>}
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                className="px-2.5 py-1 bg-emerald-600/40 hover:bg-emerald-600 text-emerald-200 hover:text-white rounded-lg text-[10px] font-bold border border-emerald-500/40 shrink-0"
+                              >
+                                Chọn
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {StorageService.getUsers().length > 0 && (
+                        <div className="pt-2 border-t border-slate-800">
+                          <button
+                            type="button"
+                            onClick={handleClearDemoData}
+                            className="w-full py-1.5 px-2 bg-red-950/40 hover:bg-red-900/60 border border-red-800/50 text-red-300 hover:text-red-100 rounded-lg text-[10px] font-bold flex items-center justify-center space-x-1 transition-all"
+                          >
+                            <Trash2 className="w-3 h-3 text-red-400" />
+                            <span>Xóa sạch dữ liệu demo đang lưu trên máy</span>
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

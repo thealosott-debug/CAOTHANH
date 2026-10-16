@@ -131,7 +131,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = () => {
           <div className="flex items-center space-x-2.5">
             <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
             <span>
-              Hệ thống hiện chưa có danh sách hộ chăn nuôi thực địa. Để nạp dữ liệu từ file Excel chuẩn hoặc nạp lại bộ dữ liệu DEMO, vui lòng truy cập menu <strong>Cài đặt hệ thống</strong> hoặc <strong>Quản lý Hộ</strong>.
+              Hệ thống hiện chưa có danh sách hộ chăn nuôi thực địa. Để đồng bộ từ Google Sheets hoặc nạp từ file Excel, vui lòng truy cập menu <strong>Cài đặt hệ thống</strong> hoặc <strong>Quản lý Hộ</strong>.
             </span>
           </div>
         </div>

@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { BC04Record, CwmCriteria, Household, User } from '../types';
 import { StorageService } from '../services/storage';
+import { GoogleSheetsService } from '../services/googleSheets';
 import { UnlockModal } from '../components/UnlockModal';
 
 interface ModuleBC04Props {
@@ -120,7 +121,7 @@ export const ModuleBC04: React.FC<ModuleBC04Props> = ({
   };
 
   // Lưu bản ghi CWM
-  const handleSave = (lockAfterSave: boolean = false) => {
+  const handleSave = async (lockAfterSave: boolean = false) => {
     // Kiểm tra quy tắc khoa học: Không được nhập POST nếu chưa có PRE
     if (stage === 'POST' && !preRecord) {
       setErrorMessage(
@@ -182,8 +183,10 @@ export const ModuleBC04: React.FC<ModuleBC04Props> = ({
       }.`,
     });
 
+    await GoogleSheetsService.saveAndSync();
+
     setSaveSuccessMsg(
-      `Đã lưu thành công phiếu quan sát CWM (${scoreCWM}/6 điểm)${
+      `Đã lưu thành công phiếu quan sát CWM (${scoreCWM}/6 điểm) lên Google Sheets${
         lockAfterSave ? ' và Khóa an toàn.' : '.'
       }`
     );
@@ -194,7 +197,7 @@ export const ModuleBC04: React.FC<ModuleBC04Props> = ({
   };
 
   // Mở khóa dữ liệu có lý do
-  const handleConfirmUnlock = (reason: string) => {
+  const handleConfirmUnlock = async (reason: string) => {
     setIsLocked(false);
     setUnlockModalOpen(false);
 
@@ -219,6 +222,8 @@ export const ModuleBC04: React.FC<ModuleBC04Props> = ({
       householdId: selectedHouseholdId,
       reason: `Mở khóa phiếu quan sát CWM: ${reason}`,
     });
+
+    await GoogleSheetsService.saveAndSync();
 
     alert('Đã mở khóa phiếu quan sát. Bạn có thể điều chỉnh dữ liệu và bấm Lưu.');
   };

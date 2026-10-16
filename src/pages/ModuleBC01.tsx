@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { FileText, Save, Edit, CheckCircle, Lock, Unlock, AlertCircle } from 'lucide-react';
 import { BC01Record, Household, User } from '../types';
 import { StorageService } from '../services/storage';
+import { GoogleSheetsService } from '../services/googleSheets';
 import { UnlockModal } from '../components/UnlockModal';
 
 interface ModuleBC01Props {
@@ -11,7 +12,7 @@ interface ModuleBC01Props {
 
 export const ModuleBC01: React.FC<ModuleBC01Props> = ({ currentUser, onRefreshData }) => {
   const households = StorageService.getHouseholds();
-  const [selectedHouseholdId, setSelectedHouseholdId] = useState<string>('H01');
+  const [selectedHouseholdId, setSelectedHouseholdId] = useState<string>(households[0]?.id || '');
 
   const bc01List = StorageService.getBC01List();
   const currentRecord = bc01List.find((b) => b.householdId === selectedHouseholdId);
@@ -68,7 +69,7 @@ export const ModuleBC01: React.FC<ModuleBC01Props> = ({ currentUser, onRefreshDa
     setMessage('');
   };
 
-  const handleSave = (lockAfter: boolean = false) => {
+  const handleSave = async (lockAfter: boolean = false) => {
     const list = StorageService.getBC01List();
     const existingIndex = list.findIndex((b) => b.householdId === selectedHouseholdId);
 
@@ -127,14 +128,17 @@ export const ModuleBC01: React.FC<ModuleBC01Props> = ({ currentUser, onRefreshDa
       reason: `Cập nhật phiếu BC-01 thông tin hộ ${selectedHouseholdId}${lockAfter ? ' (Đã xác nhận & Khóa)' : ''}.`,
     });
 
-    setMessage(`Đã lưu thành công phiếu BC-01 cho hộ ${selectedHouseholdId}!`);
+    // Đồng bộ trực tiếp lên Google Sheets và tải lại
+    await GoogleSheetsService.saveAndSync();
+
+    setMessage(`Đã lưu thành công phiếu BC-01 cho hộ ${selectedHouseholdId} lên Google Sheets!`);
     setTimeout(() => {
       setMessage('');
       if (onRefreshData) onRefreshData();
     }, 2000);
   };
 
-  const handleUnlockConfirm = (reason: string) => {
+  const handleUnlockConfirm = async (reason: string) => {
     setIsLocked(false);
     setUnlockModalOpen(false);
 
@@ -156,6 +160,8 @@ export const ModuleBC01: React.FC<ModuleBC01Props> = ({ currentUser, onRefreshDa
       householdId: selectedHouseholdId,
       reason: `Mở khóa phiếu BC-01: ${reason}`,
     });
+
+    await GoogleSheetsService.saveAndSync();
 
     alert('Đã mở khóa phiếu BC-01. Bạn có thể chỉnh sửa và Lưu.');
   };

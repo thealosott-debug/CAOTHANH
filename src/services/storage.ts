@@ -22,9 +22,7 @@ import {
 import {
   CWM_CRITERIA_GUIDE,
   DEFAULT_CONFIG,
-  DEFAULT_USERS,
   PERMANENT_APPS_SCRIPT_URL,
-  generateInitialHouseholds,
   KNOWLEDGE_QUESTIONS,
 } from '../config/initialData';
 
@@ -406,77 +404,24 @@ export class StorageService {
     });
   }
 
-  // --- KHỞI TẠO HỆ THỐNG AN TOÀN (BẢO TOÀN DỮ LIỆU ĐÃ TẠO) ---
+  // --- KHỞI TẠO HỆ THỐNG AN TOÀN (DỮ LIỆU ĐỌC 100% TỪ GOOGLE SHEETS) ---
   static async initializeDatabaseIfEmpty(): Promise<void> {
-    const existingUsers = this.getUsers();
-    const hasAdmin = existingUsers.some(u => u.role === 'ADMIN');
-
-    // Chỉ bổ sung tài khoản Admin mặc định nếu hệ thống chưa từng có admin
-    if (!hasAdmin) {
-      const adminUser: User = {
-        id: 'USR_ADMIN_01',
-        username: 'admin',
-        fullName: 'Quản trị viên (Chủ nhiệm đề tài)',
-        email: 'admin@research.vn',
-        phone: '',
-        role: 'ADMIN',
-        status: 'ACTIVE',
-        password: '123456',
-        plainPasswordHint: '123456',
-        createdAt: new Date().toISOString(),
-      };
-      // Giữ nguyên toàn bộ tài khoản người dùng đã tạo trước đó
-      const mergedUsers = [adminUser, ...existingUsers.filter(u => u.username !== 'admin')];
-      this.saveUsersDirectly(mergedUsers);
-    }
+    // Không tự động tạo tài khoản Admin hay bất kỳ bản ghi nào nếu không có trên Google Sheets.
+    // Toàn bộ dữ liệu được quản lý bởi Google Sheets.
   }
 
-  // --- XÓA TOÀN BỘ DỮ LIỆU NỀN MẪU, ĐỂ TRẮNG ĐÓN DỮ LIỆU THỰC TẾ ---
+  // --- XÓA CACHE CỤC BỘ ĐỂ ĐỒNG BỘ LẠI TỪ GOOGLE SHEETS ---
   static async resetToCleanState(): Promise<void> {
-    const adminUser: User = {
-      id: 'USR_ADMIN_01',
-      username: 'admin',
-      fullName: 'Quản trị viên (Chủ nhiệm đề tài)',
-      email: 'admin@research.vn',
-      phone: '',
-      role: 'ADMIN',
-      status: 'ACTIVE',
-      password: '123456',
-      plainPasswordHint: '123456',
-      createdAt: new Date().toISOString(),
-    };
-
-    // Chỉ giữ lại tài khoản Admin để đăng nhập quản trị
-    this.saveUsers([adminUser]);
-    this.saveHouseholds([]);
-    this.saveBC01List([]);
-    this.saveBC02List([]);
-    this.saveBC03List([]);
-    this.saveBC04List([]);
-    this.saveBC05List([]);
-    this.saveBC06List([]);
-    this.saveBC07List([]);
-    this.setCurrentUser(adminUser);
-
-    this.saveAuditLogs([
-      {
-        id: 'LOG_INIT_CLEAN',
-        timestamp: new Date().toISOString(),
-        userId: 'USR_ADMIN_01',
-        username: 'admin',
-        userRole: 'ADMIN',
-        action: 'RESET',
-        targetModule: 'SYSTEM',
-        reason: 'Hệ thống đã xóa toàn bộ dữ liệu nền mẫu (hộ kinh doanh, người nghiên cứu, khảo sát cũ). Sẵn sàng tiếp nhận dữ liệu thực tế.',
-      },
-    ]);
-
-    localStorage.setItem('gfr_real_data_clean_flag_v3', 'true');
-  }
-
-  // --- NẠP DỮ LIỆU DEMO ĐẦY ĐỦ (KHI CẦN THỬ NGHIỆM) ---
-  static async resetToDemoData(): Promise<void> {
-    await this.resetToCleanState();
+    this.saveUsersDirectly([]);
+    this.saveHouseholdsDirectly([]);
+    this.saveBC01ListDirectly([]);
+    this.saveBC02ListDirectly([]);
+    this.saveBC03ListDirectly([]);
+    this.saveBC04ListDirectly([]);
+    this.saveBC05ListDirectly([]);
+    this.saveBC06ListDirectly([]);
+    this.saveBC07ListDirectly([]);
+    this.setCurrentUser(null);
   }
 
   // --- XÓA TOÀN BỘ DỮ LIỆU NGHIÊN CỨU (Chỉ Admin) ---

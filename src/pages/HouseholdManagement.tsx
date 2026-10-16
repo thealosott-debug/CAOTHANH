@@ -144,22 +144,6 @@ export const HouseholdManagement: React.FC<HouseholdManagementProps> = ({
     setIsModalOpen(true);
   };
 
-  // Xóa sạch toàn bộ dữ liệu nền mẫu để người dùng tự nhập dữ liệu thực
-  const handleResetToClean = async () => {
-    const confirmClean = window.confirm(
-      'BẠN CÓ CHẮC CHẮN MUỐN XÓA TOÀN BỘ DỮ LIỆU NỀN MẪU?\n\n' +
-      '• Toàn bộ danh sách hộ kinh doanh, người nghiên cứu, các phiếu khảo sát và báo cáo mẫu sẽ được xóa sạch.\n' +
-      '• Hệ thống chỉ giữ lại duy nhất tài khoản Quản trị viên (admin / admin123) để bạn tự nhập dữ liệu thực tế.\n\n' +
-      'Bấm OK để thực hiện ngay.'
-    );
-    if (!confirmClean) return;
-
-    await StorageService.resetToCleanState();
-    setHouseholds([]);
-    alert('Đã xóa sạch toàn bộ dữ liệu mẫu! Giờ bạn có thể bắt đầu nhập dữ liệu thực tế của mình.');
-    if (onRefreshData) onRefreshData();
-  };
-
   // Mở modal sửa hộ
   const handleOpenEdit = (h: Household) => {
     setEditingHousehold(h);
@@ -313,24 +297,6 @@ export const HouseholdManagement: React.FC<HouseholdManagementProps> = ({
       bc01List.push(newBc01);
       StorageService.saveBC01List(bc01List);
 
-      // Tự động cấp tài khoản đăng nhập cho hộ chăn nuôi nếu chưa có (Mật khẩu mặc định: 123456)
-      const userList = StorageService.getUsers();
-      if (!userList.some((u) => u.householdId === newH.id || u.username === newH.id.toLowerCase())) {
-        userList.push({
-          id: `USR_${newH.id}`,
-          username: newH.id.toLowerCase(),
-          fullName: newH.representativeName,
-          phone: newH.phone,
-          role: 'HOUSEHOLD',
-          householdId: newH.id,
-          status: 'ACTIVE',
-          password: '123456',
-          plainPasswordHint: '123456',
-          createdAt: new Date().toISOString(),
-        });
-        StorageService.saveUsers(userList);
-      }
-
       StorageService.addAuditLog({
         userId: currentUser.id,
         username: currentUser.username,
@@ -342,13 +308,14 @@ export const HouseholdManagement: React.FC<HouseholdManagementProps> = ({
       });
     }
 
-    GoogleSheetsService.triggerAutoSave(50);
+    // Lưu trực tiếp lên Google Sheets và đọc lại để đồng bộ nguồn chuẩn
+    await GoogleSheetsService.saveAndSync();
     setIsModalOpen(false);
     if (onRefreshData) onRefreshData();
   };
 
   // Xóa một hộ chăn nuôi
-  const handleDeleteHousehold = (h: Household) => {
+  const handleDeleteHousehold = async (h: Household) => {
     if (!isAdmin) return;
     const confirmDelete = window.confirm(
       `BẠN CÓ CHẮC CHẮN MUỐN XÓA HỘ "${h.id} - ${h.representativeName}"?\n\n- Toàn bộ hồ sơ khảo sát và tài khoản liên kết với hộ này sẽ được gỡ bỏ khỏi hệ thống.`
@@ -386,6 +353,8 @@ export const HouseholdManagement: React.FC<HouseholdManagementProps> = ({
       reason: `Admin xóa hộ ${h.id} (${h.representativeName}) khỏi hệ thống nghiên cứu.`,
     });
 
+    await GoogleSheetsService.saveAndSync();
+
     if (onRefreshData) onRefreshData();
   };
 
@@ -398,7 +367,7 @@ export const HouseholdManagement: React.FC<HouseholdManagementProps> = ({
   };
 
   // Xác nhận đổi nhóm với lý do Audit Log
-  const handleConfirmChangeGroup = (e: React.FormEvent) => {
+  const handleConfirmChangeGroup = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!targetHouseholdForGroup || !groupChangeReason.trim()) return;
 
@@ -425,6 +394,8 @@ export const HouseholdManagement: React.FC<HouseholdManagementProps> = ({
         newValue: `Nhóm = ${newGroupSelected}`,
         reason: `Điều chỉnh phân nhóm: ${groupChangeReason.trim()}`,
       });
+
+      await GoogleSheetsService.saveAndSync();
     }
 
     setIsChangeGroupModalOpen(false);
@@ -433,10 +404,10 @@ export const HouseholdManagement: React.FC<HouseholdManagementProps> = ({
   };
 
   // Phân nhóm ngẫu nhiên (Stratified Random Assignment)
-  const handleRandomizeGroups = () => {
+  const handleRandomizeGroups = async () => {
     if (!isAdmin) return;
     const confirmRand = window.confirm(
-      'BẠN CÓ CHẮC CHẮN MUỐN PHÂN NHÓM NGẪU NHIÊN 40 HỘ?\n\n- Hệ thống sẽ chia ngẫu nhiên 20 hộ vào nhóm Can thiệp (TN) và 20 hộ vào nhóm Đối chứng (ĐC).\n- Thao tác này sẽ được ghi vào AUDIT_LOG theo phương pháp nghiên cứu thực nghiệm.'
+      'BẠN CÓ CHẮC CHẮN MUỐN PHÂN NHÓM NGẪU NHIÊN CÁC HỘ?\n\n- Hệ thống sẽ chia ngẫu nhiên các hộ vào nhóm Can thiệp (TN) và nhóm Đối chứng (ĐC).\n- Thao tác này sẽ được ghi vào AUDIT_LOG theo phương pháp nghiên cứu thực nghiệm và đồng bộ ngay lên Google Sheets.'
     );
     if (!confirmRand) return;
 
@@ -472,7 +443,26 @@ export const HouseholdManagement: React.FC<HouseholdManagementProps> = ({
       reason: `Thực hiện phân ngẫu nhiên chuẩn hóa: ${half} hộ nhóm TN và ${currentList.length - half} hộ nhóm ĐC.`,
     });
 
-    alert('Đã hoàn tất phân nhóm ngẫu nhiên 40 hộ nghiên cứu!');
+    await GoogleSheetsService.saveAndSync();
+
+    alert('Đã hoàn tất phân nhóm ngẫu nhiên các hộ nghiên cứu và lưu lên Google Sheets!');
+    if (onRefreshData) onRefreshData();
+  };
+
+  const handleClearDemoHouseholds = () => {
+    const confirmClear = window.confirm(
+      'BẠN CÓ CHẮC CHẮN MUỐN XÓA SẠCH DỮ LIỆU DEMO CỤC BỘ?\n\n' +
+      '• Toàn bộ danh sách hộ và phiếu khảo sát demo trong bộ nhớ máy sẽ được làm sạch.\n' +
+      '• Sau đó, bạn có thể điền thông tin thực tế trên Google Sheets rồi bấm "Đồng bộ từ Google Sheets" để nạp vào hệ thống.'
+    );
+    if (!confirmClear) return;
+
+    StorageService.clearResearchData();
+    setHouseholds([]);
+    setSyncStatusMsg({
+      type: 'success',
+      text: 'Đã xóa sạch toàn bộ dữ liệu hộ demo! Bạn có thể nhập hộ trên Google Sheets rồi bấm Đồng bộ.',
+    });
     if (onRefreshData) onRefreshData();
   };
 
@@ -521,14 +511,6 @@ export const HouseholdManagement: React.FC<HouseholdManagementProps> = ({
                 <span>Tải mẫu Excel</span>
               </button>
               <button
-                onClick={handleResetToClean}
-                className="px-3.5 py-2 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-colors shadow-xs"
-                title="Xóa toàn bộ hộ kinh doanh, người nghiên cứu và dữ liệu nền mẫu để nhập dữ liệu thực"
-              >
-                <Trash2 className="w-4 h-4 text-red-600" />
-                <span>Xóa sạch dữ liệu mẫu</span>
-              </button>
-              <button
                 onClick={handleRandomizeGroups}
                 disabled={households.length === 0}
                 className="px-3.5 py-2 bg-slate-800 hover:bg-slate-900 disabled:opacity-40 text-white rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-colors shadow-xs"
@@ -537,6 +519,16 @@ export const HouseholdManagement: React.FC<HouseholdManagementProps> = ({
                 <Shuffle className="w-4 h-4 text-amber-400" />
                 <span>Phân nhóm ngẫu nhiên</span>
               </button>
+              {households.length > 0 && (
+                <button
+                  onClick={handleClearDemoHouseholds}
+                  className="px-3 py-2 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-colors shadow-2xs"
+                  title="Xóa sạch dữ liệu hộ demo trong bộ nhớ máy để nhập dữ liệu thực tế"
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                  <span>Xóa dữ liệu demo</span>
+                </button>
+              )}
               <button
                 onClick={handleOpenAdd}
                 className="px-4 py-2 bg-slate-900 hover:bg-black text-white rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-colors shadow-xs"

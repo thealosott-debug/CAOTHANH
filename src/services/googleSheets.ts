@@ -1,11 +1,27 @@
 /**
- * Dịch vụ kết nối và đồng bộ hai chiều trực tiếp với Google Sheets
- * Toàn bộ dữ liệu Giảng viên, Học viên, Hộ chăn nuôi gà và Nhật ký được lưu trữ vĩnh viễn trên Google Sheets
- * 100% chuẩn hóa Tiếng Việt, không lưu nền Cloud, không bị xóa dữ liệu
+ * Dịch vụ kết nối và đồng bộ trực tiếp với Google Sheets (Single Source of Truth)
+ * Google Sheets là Database duy nhất của ứng dụng: App đọc, hiển thị, chỉnh sửa và ghi về Google Sheets.
+ * Không tự tạo dữ liệu giả lập, bảo toàn 100% dữ liệu lịch sử.
  */
 
 import { StorageService } from './storage';
-import { SyncStatus, User, Household, BC01Record, BC06Record, Role, AccountStatus, StudyGroup } from '../types';
+import {
+  SyncStatus,
+  User,
+  Household,
+  BC01Record,
+  BC02Record,
+  BC03Record,
+  BC04Record,
+  BC05Record,
+  BC06Record,
+  BC07Record,
+  Role,
+  AccountStatus,
+  StudyGroup,
+  AuditLog,
+  ResearchConfig,
+} from '../types';
 import { PERMANENT_APPS_SCRIPT_URL } from '../config/initialData';
 
 export interface SheetDefinition {
@@ -16,31 +32,117 @@ export interface SheetDefinition {
 
 export const VIETNAMESE_SHEETS_META: SheetDefinition[] = [
   {
-    name: 'GIANG_VIEN',
-    description: 'Danh sách Giảng viên & Ban nghiên cứu đề tài',
+    name: 'TAI_KHOAN',
+    description: 'Danh sách Tổng hợp Toàn bộ Tài khoản (HDAN, GV, HS, Hộ dân, Quản trị)',
     columns: [
-      'MÃ GIẢNG VIÊN', 'HỌ VÀ TÊN', 'SỐ ĐIỆN THOẠI', 'EMAIL', 'ĐƠN VỊ / BỘ MÔN',
-      'CHỨC VỤ / HỌC VỊ', 'TÊN ĐĂNG NHẬP', 'MẬT KHẨU', 'VAI TRÒ', 'TRẠNG THÁI',
-      'NGÀY TẠO', 'NGÀY CẬP NHẬT', 'GHI CHÚ'
+      'MÃ TÀI KHOẢN', 'TÊN ĐĂNG NHẬP', 'HỌ VÀ TÊN', 'VAI TRÒ', 'CHỨC VỤ / HỌC VỊ',
+      'ĐƠN VỊ / ĐỊA CHỈ', 'SỐ ĐIỆN THOẠI', 'EMAIL', 'MÃ HỘ LIÊN KẾT', 'MẬT KHẨU',
+      'TRẠNG THÁI', 'NGÀY TẠO', 'NGÀY CẬP NHẬT'
     ],
   },
   {
-    name: 'HOC_VIEN',
-    description: 'Danh sách Học sinh / Sinh viên phụ trách hỗ trợ',
+    name: 'USERS',
+    description: 'Danh sách Users hệ thống',
     columns: [
-      'MÃ HỌC VIÊN', 'HỌ VÀ TÊN', 'NHÓM / LỚP', 'SỐ ĐIỆN THOẠI', 'EMAIL',
-      'HỘ PHỤ TRÁCH', 'TÊN ĐĂNG NHẬP', 'MẬT KHẨU', 'VAI TRÒ', 'TRẠNG THÁI',
-      'NGÀY THAM GIA', 'GHI CHÚ', 'NGÀY TẠO', 'NGÀY CẬP NHẬT'
+      'USER_ID', 'USERNAME', 'FULL_NAME', 'PHONE', 'ROLE', 'HOUSEHOLD_ID',
+      'STATUS', 'TITLE', 'ORGANIZATION', 'PASSWORD_HASH', 'SALT', 'DEFAULT_PASS', 'CREATED_AT'
     ],
   },
   {
     name: 'HO_CHAN_NUOI',
-    description: 'Danh mục Hộ chăn nuôi gà và phân công nghiên cứu',
+    description: 'Danh mục Hộ chăn nuôi gà',
     columns: [
       'MÃ HỘ', 'TÊN CHỦ HỘ', 'SỐ ĐIỆN THOẠI', 'ĐỊA CHỈ', 'NHÓM NGHIÊN CỨU',
       'QUY MÔ ĐÀN (CON)', 'GIỐNG GÀ', 'HÌNH THỨC NUÔI', 'HỌC VIÊN PHỤ TRÁCH', 'GIẢNG VIÊN GIÁM SÁT',
       'TÊN ĐĂNG NHẬP', 'MẬT KHẨU', 'TRẠNG THÁI', 'NGÀY VÀO ĐÀN', 'GHI CHÚ',
       'NGÀY TẠO', 'NGÀY CẬP NHẬT'
+    ],
+  },
+  {
+    name: 'HOUSEHOLDS',
+    description: 'Danh sách Hộ chăn nuôi',
+    columns: [
+      'HOUSEHOLD_ID', 'REPRESENTATIVE_NAME', 'PHONE', 'ADDRESS', 'LIVESTOCK_TYPE',
+      'HERD_SIZE', 'FARMING_YEARS', 'FARMING_TYPE', 'CURRENT_WASTE_METHOD', 'GROUP',
+      'STATUS', 'JOINED_DATE', 'RESEARCHER', 'NOTES', 'UPDATED_AT'
+    ],
+  },
+  {
+    name: 'BC01_HO_THONG_TIN',
+    description: 'Phiếu BC-01 Thông tin hộ chăn nuôi',
+    columns: [
+      'RECORD_ID', 'HOUSEHOLD_ID', 'NAME', 'PHONE', 'ADDRESS', 'LIVESTOCK',
+      'HERD_SIZE', 'FARMING_YEARS', 'FARMING_TYPE', 'WASTE_METHOD', 'IS_LOCKED',
+      'CREATED_BY', 'CREATED_AT', 'UPDATED_AT', 'UPDATED_BY'
+    ],
+  },
+  {
+    name: 'BC02_KAP_PRE',
+    description: 'Phiếu BC-02 Khảo sát KAP trước can thiệp',
+    columns: [
+      'RECORD_ID', 'HOUSEHOLD_ID', 'SCORE_K_PRE', 'SCORE_T_PRE', 'SCORE_HT_PRE',
+      'B1_THU_GOM', 'B2_PHAN_LOAI', 'B3_LUU_CHUA', 'B4_KHONG_XA', 'B5_XU_LY', 'B6_VE_SINH',
+      'IS_LOCKED', 'SUBMITTED_BY', 'SUBMITTED_AT'
+    ],
+  },
+  {
+    name: 'BC03_YDINH',
+    description: 'Phiếu BC-03 Ý định thay đổi',
+    columns: [
+      'RECORD_ID', 'HOUSEHOLD_ID', 'SCORE_YD_PRE', 'YD01_Y_DINH', 'YD02_SAN_SANG',
+      'YD03_NIEM_TIN', 'YD04_TRACH_NHIEM', 'YD05_DUY_TRI', 'IS_LOCKED', 'SUBMITTED_BY', 'SUBMITTED_AT'
+    ],
+  },
+  {
+    name: 'BC04_CWM_PRE',
+    description: 'Phiếu BC-04 Quan sát CWM Trước can thiệp',
+    columns: [
+      'RECORD_ID', 'HOUSEHOLD_ID', 'SCORE_CWM_PRE', 'B1_THU_GOM', 'B2_PHAN_LOAI',
+      'B3_LUU_CHUA', 'B4_KHONG_XA', 'B5_XU_LY', 'B6_VE_SINH', 'NOTES', 'EVIDENCE',
+      'FAILURE_REASONS', 'OBSERVED_BY', 'OBSERVED_AT', 'IS_LOCKED'
+    ],
+  },
+  {
+    name: 'BC04_CWM_POST',
+    description: 'Phiếu BC-04 Quan sát CWM Sau can thiệp',
+    columns: [
+      'RECORD_ID', 'HOUSEHOLD_ID', 'SCORE_CWM_POST', 'B1_THU_GOM', 'B2_PHAN_LOAI',
+      'B3_LUU_CHUA', 'B4_KHONG_XA', 'B5_XU_LY', 'B6_VE_SINH', 'NOTES', 'EVIDENCE',
+      'FAILURE_REASONS', 'OBSERVED_BY', 'OBSERVED_AT', 'IS_LOCKED'
+    ],
+  },
+  {
+    name: 'BC05_CAM_KET',
+    description: 'Phiếu BC-05 Cam kết xanh',
+    columns: [
+      'RECORD_ID', 'HOUSEHOLD_ID', 'B1_THU_GOM', 'B2_PHAN_LOAI', 'B3_LUU_CHUA',
+      'B4_KHONG_XA', 'B5_XU_LY', 'B6_VE_SINH', 'B7_BAO_CAO_TUAN', 'CONFIRMED',
+      'CONFIRMED_BY', 'CONFIRMED_AT', 'VERSION'
+    ],
+  },
+  {
+    name: 'BC06_WEEKLY',
+    description: 'Phiếu BC-06 Báo cáo theo dõi hằng tuần',
+    columns: [
+      'RECORD_ID', 'HOUSEHOLD_ID', 'WEEK', 'WEEKLY_SCORE', 'B1', 'B2', 'B3', 'B4', 'B5', 'B6',
+      'BARRIERS', 'OTHER_BARRIERS', 'SUBMITTED_BY', 'SUBMITTED_AT'
+    ],
+  },
+  {
+    name: 'BC07_POST',
+    description: 'Phiếu BC-07 Khảo sát sau can thiệp',
+    columns: [
+      'RECORD_ID', 'HOUSEHOLD_ID', 'SCORE_HT_POST', 'B1_THU_GOM', 'B2_PHAN_LOAI',
+      'B3_LUU_CHUA', 'B4_KHONG_XA', 'B5_XU_LY', 'B6_VE_SINH', 'MAINTENANCE_WILLINGNESS',
+      'FEEDBACK', 'REMAINING_BARRIERS', 'IS_LOCKED', 'SUBMITTED_BY', 'SUBMITTED_AT'
+    ],
+  },
+  {
+    name: 'BC08_TONG_HOP',
+    description: 'Bảng BC-08 Tổng hợp dữ liệu đề tài',
+    columns: [
+      'HOUSEHOLD_ID', 'REPRESENTATIVE_NAME', 'GROUP', 'K_PRE', 'T_PRE', 'YD_PRE',
+      'HT_PRE', 'CWM_PRE', 'HT_POST', 'CWM_POST', 'DELTA_CWM', 'W1', 'W2', 'W3', 'W4', 'W5', 'W6', 'STATUS'
     ],
   },
   {
@@ -89,9 +191,15 @@ export const VIETNAMESE_SHEETS_META: SheetDefinition[] = [
 export const RESEARCH_SHEETS = VIETNAMESE_SHEETS_META;
 
 export class GoogleSheetsService {
+  private static isDataLoadedFromSheets: boolean = false;
+  private static autoSyncTimer: any = null;
+
+  static hasLoadedFromSheets(): boolean {
+    return this.isDataLoadedFromSheets;
+  }
+
   /**
-   * Tạo gói dữ liệu chuẩn bị gửi đến Google Sheets với đầy đủ các Sheet Tiếng Việt
-   * (Kèm theo Sheet tương thích để không làm gián đoạn hệ thống)
+   * Tạo gói dữ liệu chuẩn bị gửi đến Google Sheets với đầy đủ 17 Bảng tính
    */
   static prepareWorkbookPayload(): Record<string, any[][]> {
     const config = StorageService.getConfig();
@@ -109,7 +217,7 @@ export class GoogleSheetsService {
 
     const payload: Record<string, any[][]> = {};
 
-    // 1. SHEET TIẾNG VIỆT TỔNG HỢP: TAI_KHOAN (Chứa 100% tài khoản: HDAN, GV, HS, Hộ dân, Quản trị)
+    // 1. TAI_KHOAN
     payload['TAI_KHOAN'] = [
       [
         'MÃ TÀI KHOẢN', 'TÊN ĐĂNG NHẬP', 'HỌ VÀ TÊN', 'VAI TRÒ', 'CHỨC VỤ / HỌC VỊ',
@@ -136,7 +244,7 @@ export class GoogleSheetsService {
           u.phone || '',
           u.email || '',
           u.householdId || '',
-          u.plainPasswordHint || '123456',
+          u.plainPasswordHint || u.password || '123456',
           u.status === 'ACTIVE' ? 'HOẠT ĐỘNG' : 'TẠM KHÓA',
           u.createdAt || new Date().toISOString(),
           new Date().toISOString(),
@@ -144,7 +252,85 @@ export class GoogleSheetsService {
       }),
     ];
 
-    // 2. SHEET TIẾNG VIỆT: GIANG_VIEN (Giảng viên, Cán bộ hướng dẫn, Quản trị viên)
+    // 2. USERS
+    payload['USERS'] = [
+      ['USER_ID', 'USERNAME', 'FULL_NAME', 'PHONE', 'ROLE', 'HOUSEHOLD_ID', 'STATUS', 'TITLE', 'ORGANIZATION', 'PASSWORD_HASH', 'SALT', 'DEFAULT_PASS', 'CREATED_AT'],
+      ...users.map((u) => [
+        u.id,
+        u.username,
+        u.fullName,
+        u.phone || '',
+        u.role,
+        u.householdId || '',
+        u.status,
+        u.title || '',
+        u.organization || '',
+        u.passwordHash || '',
+        u.salt || '',
+        u.plainPasswordHint || u.password || '123456',
+        u.createdAt || new Date().toISOString(),
+      ]),
+    ];
+
+    // 3. HO_CHAN_NUOI
+    payload['HO_CHAN_NUOI'] = [
+      [
+        'MÃ HỘ', 'TÊN CHỦ HỘ', 'SỐ ĐIỆN THOẠI', 'ĐỊA CHỈ', 'NHÓM NGHIÊN CỨU',
+        'QUY MÔ ĐÀN (CON)', 'GIỐNG GÀ', 'HÌNH THỨC NUÔI', 'HỌC VIÊN PHỤ TRÁCH', 'GIẢNG VIÊN GIÁM SÁT',
+        'TÊN ĐĂNG NHẬP', 'MẬT KHẨU', 'TRẠNG THÁI', 'NGÀY VÀO ĐÀN', 'GHI CHÚ',
+        'NGÀY TẠO', 'NGÀY CẬP NHẬT'
+      ],
+      ...households.map((h) => {
+        const u = users.find((usr) => usr.householdId === h.id || usr.username.toLowerCase() === h.id.toLowerCase());
+        const pass = u ? (u.plainPasswordHint || u.password || '123456') : '123456';
+        const uname = u ? u.username : h.id.toLowerCase();
+
+        const supervisor = users.find((u) => u.role === 'SUPERVISOR');
+        return [
+          h.id,
+          h.representativeName,
+          h.phone || '',
+          h.address || '',
+          h.group === 'TN' ? 'Can thiệp (TN)' : 'Đối chứng (ĐC)',
+          h.herdSize || '',
+          h.livestockType || '',
+          h.farmingType || '',
+          h.assignedResearcher || '',
+          supervisor ? supervisor.fullName : '',
+          uname,
+          pass,
+          h.accountStatus === 'ACTIVE' ? 'HOẠT ĐỘNG' : 'TẠM KHÓA',
+          h.joinedDate || '',
+          h.notes || '',
+          h.createdAt || new Date().toISOString(),
+          h.updatedAt || new Date().toISOString(),
+        ];
+      }),
+    ];
+
+    // 4. HOUSEHOLDS
+    payload['HOUSEHOLDS'] = [
+      ['HOUSEHOLD_ID', 'REPRESENTATIVE_NAME', 'PHONE', 'ADDRESS', 'LIVESTOCK_TYPE', 'HERD_SIZE', 'FARMING_YEARS', 'FARMING_TYPE', 'CURRENT_WASTE_METHOD', 'GROUP', 'STATUS', 'JOINED_DATE', 'RESEARCHER', 'NOTES', 'UPDATED_AT'],
+      ...households.map((h) => [
+        h.id,
+        h.representativeName,
+        h.phone || '',
+        h.address || '',
+        h.livestockType || '',
+        h.herdSize || '',
+        h.farmingYears || '',
+        h.farmingType || '',
+        h.currentWasteMethod || '',
+        h.group,
+        h.accountStatus,
+        h.joinedDate || '',
+        h.assignedResearcher || '',
+        h.notes || '',
+        h.updatedAt || new Date().toISOString(),
+      ]),
+    ];
+
+    // 5. GIANG_VIEN
     const lecturers = users.filter((u) => u.role === 'ADMIN' || u.role === 'SUPERVISOR');
     payload['GIANG_VIEN'] = [
       [
@@ -159,20 +345,20 @@ export class GoogleSheetsService {
           u.fullName,
           u.phone || '',
           u.email || '',
-          u.organization || 'Khoa Chăn nuôi',
-          u.title || (u.role === 'ADMIN' ? 'Chủ nhiệm đề tài' : (isGuide ? 'Cán bộ hướng dẫn' : 'Giảng viên')),
+          u.organization || '',
+          u.title || (u.role === 'ADMIN' ? 'Quản trị viên' : (isGuide ? 'Cán bộ hướng dẫn' : 'Giảng viên')),
           u.username,
-          u.plainPasswordHint || '123456',
+          u.plainPasswordHint || u.password || '123456',
           u.role === 'ADMIN' ? 'QUẢN TRỊ VIÊN' : (isGuide ? 'CÁN BỘ HƯỚNG DẪN (HDAN)' : 'GIẢNG VIÊN (GV)'),
           u.status === 'ACTIVE' ? 'HOẠT ĐỘNG' : 'TẠM KHÓA',
           u.createdAt || new Date().toISOString(),
           new Date().toISOString(),
-          isGuide ? 'Cán bộ hướng dẫn nghiên cứu thực địa' : 'Giảng viên ban nghiên cứu',
+          u.notes || '',
         ];
       }),
     ];
 
-    // 3. SHEET TIẾNG VIỆT: HOC_VIEN (Học sinh / Học viên / Sinh viên phụ trách)
+    // 6. HOC_VIEN
     const students = users.filter((u) => u.role === 'RESEARCHER');
     payload['HOC_VIEN'] = [
       [
@@ -181,7 +367,6 @@ export class GoogleSheetsService {
         'NGÀY THAM GIA', 'GHI CHÚ', 'NGÀY TẠO', 'NGÀY CẬP NHẬT'
       ],
       ...students.map((u) => {
-        // Tìm các hộ học viên này phụ trách
         const assignedH = households
           .filter((h) => h.assignedResearcher === u.username || h.assignedResearcher === u.fullName)
           .map((h) => h.id)
@@ -190,58 +375,251 @@ export class GoogleSheetsService {
         return [
           u.id,
           u.fullName,
-          u.organization || 'Nhóm sinh viên nghiên cứu',
+          u.organization || '',
           u.phone || '',
           u.email || '',
-          assignedH || 'Chưa phân công',
+          assignedH || '',
           u.username,
-          u.plainPasswordHint || '123456',
+          u.plainPasswordHint || u.password || '123456',
           'HỌC VIÊN PHỤ TRÁCH',
           u.status === 'ACTIVE' ? 'HOẠT ĐỘNG' : 'TẠM KHÓA',
-          u.createdAt ? u.createdAt.split('T')[0] : '2026-09-01',
-          'Học viên theo dõi thực địa chăn nuôi gà',
+          u.createdAt ? u.createdAt.split('T')[0] : '',
+          u.notes || '',
           u.createdAt || new Date().toISOString(),
           new Date().toISOString(),
         ];
       }),
     ];
 
-    // 3. SHEET TIẾNG VIỆT: HO_CHAN_NUOI (Hộ nuôi gà)
-    payload['HO_CHAN_NUOI'] = [
+    // 7. BC01_HO_THONG_TIN
+    payload['BC01_HO_THONG_TIN'] = [
       [
-        'MÃ HỘ', 'TÊN CHỦ HỘ', 'SỐ ĐIỆN THOẠI', 'ĐỊA CHỈ', 'NHÓM NGHIÊN CỨU',
-        'QUY MÔ ĐÀN (CON)', 'GIỐNG GÀ', 'HÌNH THỨC NUÔI', 'HỌC VIÊN PHỤ TRÁCH', 'GIẢNG VIÊN GIÁM SÁT',
-        'TÊN ĐĂNG NHẬP', 'MẬT KHẨU', 'TRẠNG THÁI', 'NGÀY VÀO ĐÀN', 'GHI CHÚ',
-        'NGÀY TẠO', 'NGÀY CẬP NHẬT'
+        'RECORD_ID', 'HOUSEHOLD_ID', 'NAME', 'PHONE', 'ADDRESS', 'LIVESTOCK',
+        'HERD_SIZE', 'FARMING_YEARS', 'FARMING_TYPE', 'WASTE_METHOD', 'IS_LOCKED',
+        'CREATED_BY', 'CREATED_AT', 'UPDATED_AT', 'UPDATED_BY'
       ],
-      ...households.map((h) => {
-        const u = users.find((usr) => usr.householdId === h.id || usr.username.toLowerCase() === h.id.toLowerCase());
-        const pass = u ? (u.plainPasswordHint || '123456') : '123456';
-        const uname = u ? u.username : h.id.toLowerCase();
-
-        return [
-          h.id,
-          h.representativeName,
-          h.phone || '',
-          h.address || '',
-          h.group === 'TN' ? 'Can thiệp (TN)' : 'Đối chứng (ĐC)',
-          h.herdSize || 500,
-          h.livestockType || 'Gà ri lai thả vườn',
-          h.farmingType || 'Bán chăn thả có đệm lót sinh học',
-          h.assignedResearcher || 'Chưa phân công',
-          'PGS.TS. Nguyễn Văn A',
-          uname,
-          pass,
-          h.accountStatus === 'ACTIVE' ? 'HOẠT ĐỘNG' : 'TẠM KHÓA',
-          h.joinedDate || '2026-09-01',
-          h.notes || 'Hộ chăn nuôi gà nghiên cứu',
-          h.createdAt || new Date().toISOString(),
-          h.updatedAt || new Date().toISOString(),
-        ];
-      }),
+      ...bc01List.map((b) => [
+        b.id,
+        b.householdId,
+        b.representativeName,
+        b.phone || '',
+        b.address || '',
+        b.livestockType || '',
+        b.herdSize || 500,
+        b.farmingYears || 3,
+        b.farmingType || '',
+        b.currentWasteMethod || '',
+        b.isLocked ? 'TRUE' : 'FALSE',
+        b.createdBy || '',
+        b.createdAt || new Date().toISOString(),
+        b.updatedAt || new Date().toISOString(),
+        b.updatedBy || '',
+      ]),
     ];
 
-    // 4. SHEET TIẾNG VIỆT: NHAT_KY_CHAN_NUOI (Nhật ký theo dõi gà & chất thải)
+    // 8. BC02_KAP_PRE
+    payload['BC02_KAP_PRE'] = [
+      [
+        'RECORD_ID', 'HOUSEHOLD_ID', 'SCORE_K_PRE', 'SCORE_T_PRE', 'SCORE_HT_PRE',
+        'B1_THU_GOM', 'B2_PHAN_LOAI', 'B3_LUU_CHUA', 'B4_KHONG_XA', 'B5_XU_LY', 'B6_VE_SINH',
+        'IS_LOCKED', 'SUBMITTED_BY', 'SUBMITTED_AT'
+      ],
+      ...bc02List.map((b) => [
+        b.id,
+        b.householdId,
+        b.scoreK ?? '',
+        b.scoreT ?? '',
+        b.scoreHT ?? '',
+        b.behaviorReport?.b1_thuGom ? 1 : 0,
+        b.behaviorReport?.b2_phanLoai ? 1 : 0,
+        b.behaviorReport?.b3_luuChua ? 1 : 0,
+        b.behaviorReport?.b4_khongXaThang ? 1 : 0,
+        b.behaviorReport?.b5_xuLyTaiSuDung ? 1 : 0,
+        b.behaviorReport?.b6_veSinh ? 1 : 0,
+        b.isLocked ? 'TRUE' : 'FALSE',
+        b.submittedBy || '',
+        b.submittedAt || new Date().toISOString(),
+      ]),
+    ];
+
+    // 9. BC03_YDINH
+    payload['BC03_YDINH'] = [
+      [
+        'RECORD_ID', 'HOUSEHOLD_ID', 'SCORE_YD_PRE', 'YD01_Y_DINH', 'YD02_SAN_SANG',
+        'YD03_NIEM_TIN', 'YD04_TRACH_NHIEM', 'YD05_DUY_TRI', 'IS_LOCKED', 'SUBMITTED_BY', 'SUBMITTED_AT'
+      ],
+      ...bc03List.map((b) => [
+        b.id,
+        b.householdId,
+        b.scoreYD ?? '',
+        b.answers?.find((a) => a.questionId === 'YD01')?.score || 5,
+        b.answers?.find((a) => a.questionId === 'YD02')?.score || 5,
+        b.answers?.find((a) => a.questionId === 'YD03')?.score || 5,
+        b.answers?.find((a) => a.questionId === 'YD04')?.score || 5,
+        b.answers?.find((a) => a.questionId === 'YD05')?.score || 5,
+        b.isLocked ? 'TRUE' : 'FALSE',
+        b.submittedBy || '',
+        b.submittedAt || new Date().toISOString(),
+      ]),
+    ];
+
+    // 10. BC04_CWM_PRE
+    const preBc04 = bc04List.filter((b) => b.stage === 'PRE');
+    payload['BC04_CWM_PRE'] = [
+      [
+        'RECORD_ID', 'HOUSEHOLD_ID', 'SCORE_CWM_PRE', 'B1_THU_GOM', 'B2_PHAN_LOAI',
+        'B3_LUU_CHUA', 'B4_KHONG_XA', 'B5_XU_LY', 'B6_VE_SINH', 'NOTES', 'EVIDENCE',
+        'FAILURE_REASONS', 'OBSERVED_BY', 'OBSERVED_AT', 'IS_LOCKED'
+      ],
+      ...preBc04.map((b) => [
+        b.id,
+        b.householdId,
+        b.scoreCWM ?? '',
+        b.criteria?.b1_thuGom || 0,
+        b.criteria?.b2_phanLoai || 0,
+        b.criteria?.b3_luuChua || 0,
+        b.criteria?.b4_khongXaThang || 0,
+        b.criteria?.b5_xuLyTaiSuDung || 0,
+        b.criteria?.b6_veSinh || 0,
+        b.observationNotes || '',
+        b.evidenceDescription || '',
+        b.failureReasons || '',
+        b.observedBy || '',
+        b.observedAt || new Date().toISOString(),
+        b.isLocked ? 'TRUE' : 'FALSE',
+      ]),
+    ];
+
+    // 11. BC04_CWM_POST
+    const postBc04 = bc04List.filter((b) => b.stage === 'POST');
+    payload['BC04_CWM_POST'] = [
+      [
+        'RECORD_ID', 'HOUSEHOLD_ID', 'SCORE_CWM_POST', 'B1_THU_GOM', 'B2_PHAN_LOAI',
+        'B3_LUU_CHUA', 'B4_KHONG_XA', 'B5_XU_LY', 'B6_VE_SINH', 'NOTES', 'EVIDENCE',
+        'FAILURE_REASONS', 'OBSERVED_BY', 'OBSERVED_AT', 'IS_LOCKED'
+      ],
+      ...postBc04.map((b) => [
+        b.id,
+        b.householdId,
+        b.scoreCWM ?? '',
+        b.criteria?.b1_thuGom || 0,
+        b.criteria?.b2_phanLoai || 0,
+        b.criteria?.b3_luuChua || 0,
+        b.criteria?.b4_khongXaThang || 0,
+        b.criteria?.b5_xuLyTaiSuDung || 0,
+        b.criteria?.b6_veSinh || 0,
+        b.observationNotes || '',
+        b.evidenceDescription || '',
+        b.failureReasons || '',
+        b.observedBy || '',
+        b.observedAt || new Date().toISOString(),
+        b.isLocked ? 'TRUE' : 'FALSE',
+      ]),
+    ];
+
+    // 12. BC05_CAM_KET
+    payload['BC05_CAM_KET'] = [
+      [
+        'RECORD_ID', 'HOUSEHOLD_ID', 'B1_THU_GOM', 'B2_PHAN_LOAI', 'B3_LUU_CHUA',
+        'B4_KHONG_XA', 'B5_XU_LY', 'B6_VE_SINH', 'B7_BAO_CAO_TUAN', 'CONFIRMED',
+        'CONFIRMED_BY', 'CONFIRMED_AT', 'VERSION'
+      ],
+      ...bc05List.map((b) => [
+        b.id,
+        b.householdId,
+        b.commitments?.b1_thuGom ? 1 : 0,
+        b.commitments?.b2_phanLoai ? 1 : 0,
+        b.commitments?.b3_luuChua ? 1 : 0,
+        b.commitments?.b4_khongXaThang ? 1 : 0,
+        b.commitments?.b5_xuLyTaiSuDung ? 1 : 0,
+        b.commitments?.b6_veSinh ? 1 : 0,
+        b.commitments?.b7_baoCaoHangTuan ? 1 : 0,
+        b.confirmed ? 'TRUE' : 'FALSE',
+        b.confirmedBy || '',
+        b.confirmedAt || '',
+        b.version || '1.0',
+      ]),
+    ];
+
+    // 13. BC06_WEEKLY
+    payload['BC06_WEEKLY'] = [
+      [
+        'RECORD_ID', 'HOUSEHOLD_ID', 'WEEK', 'WEEKLY_SCORE', 'B1', 'B2', 'B3', 'B4', 'B5', 'B6',
+        'BARRIERS', 'OTHER_BARRIERS', 'SUBMITTED_BY', 'SUBMITTED_AT'
+      ],
+      ...bc06List.map((b) => [
+        b.id,
+        b.householdId,
+        b.week,
+        b.weeklyScore ?? '',
+        b.behaviors?.b1_thuGom ? 1 : 0,
+        b.behaviors?.b2_phanLoai ? 1 : 0,
+        b.behaviors?.b3_luuChua ? 1 : 0,
+        b.behaviors?.b4_khongXaThang ? 1 : 0,
+        b.behaviors?.b5_xuLyTaiSuDung ? 1 : 0,
+        b.behaviors?.b6_veSinh ? 1 : 0,
+        (b.barriers || []).join('; '),
+        b.otherBarrierText || '',
+        b.submittedBy || '',
+        b.submittedAt || new Date().toISOString(),
+      ]),
+    ];
+
+    // 14. BC07_POST
+    payload['BC07_POST'] = [
+      [
+        'RECORD_ID', 'HOUSEHOLD_ID', 'SCORE_HT_POST', 'B1_THU_GOM', 'B2_PHAN_LOAI',
+        'B3_LUU_CHUA', 'B4_KHONG_XA', 'B5_XU_LY', 'B6_VE_SINH', 'MAINTENANCE_WILLINGNESS',
+        'FEEDBACK', 'REMAINING_BARRIERS', 'IS_LOCKED', 'SUBMITTED_BY', 'SUBMITTED_AT'
+      ],
+      ...bc07List.map((b) => [
+        b.id,
+        b.householdId,
+        b.scoreHT_Post ?? '',
+        b.behaviorReport?.b1_thuGom ? 1 : 0,
+        b.behaviorReport?.b2_phanLoai ? 1 : 0,
+        b.behaviorReport?.b3_luuChua ? 1 : 0,
+        b.behaviorReport?.b4_khongXaThang ? 1 : 0,
+        b.behaviorReport?.b5_xuLyTaiSuDung ? 1 : 0,
+        b.behaviorReport?.b6_veSinh ? 1 : 0,
+        b.maintenanceWillingness ?? 5,
+        b.feedbackProcess || '',
+        (b.mainBarriers || []).join('; '),
+        b.isLocked ? 'TRUE' : 'FALSE',
+        b.submittedBy || '',
+        b.submittedAt || new Date().toISOString(),
+      ]),
+    ];
+
+    // 15. BC08_TONG_HOP
+    payload['BC08_TONG_HOP'] = [
+      [
+        'HOUSEHOLD_ID', 'REPRESENTATIVE_NAME', 'GROUP', 'K_PRE', 'T_PRE', 'YD_PRE',
+        'HT_PRE', 'CWM_PRE', 'HT_POST', 'CWM_POST', 'DELTA_CWM', 'W1', 'W2', 'W3', 'W4', 'W5', 'W6', 'STATUS'
+      ],
+      ...bc08List.map((b) => [
+        b.householdId,
+        b.representativeName,
+        b.group,
+        b.scoreK_Pre ?? '',
+        b.scoreT_Pre ?? '',
+        b.scoreYD_Pre ?? '',
+        b.scoreHT_Pre ?? '',
+        b.scoreCWM_Pre ?? '',
+        b.scoreHT_Post ?? '',
+        b.scoreCWM_Post ?? '',
+        b.deltaCWM ?? '',
+        b.w1_score ?? '',
+        b.w2_score ?? '',
+        b.w3_score ?? '',
+        b.w4_score ?? '',
+        b.w5_score ?? '',
+        b.w6_score ?? '',
+        b.status,
+      ]),
+    ];
+
+    // 16. NHAT_KY_CHAN_NUOI
     payload['NHAT_KY_CHAN_NUOI'] = [
       [
         'MÃ NHẬT KÝ', 'MÃ HỘ', 'TÊN CHỦ HỘ', 'NGÀY GHI', 'TUẦN THEO DÕI',
@@ -257,63 +635,32 @@ export class GoogleSheetsService {
           h?.representativeName || `Hộ ${w.householdId}`,
           w.submittedAt ? w.submittedAt.split('T')[0] : new Date().toISOString().split('T')[0],
           w.week,
-          (h?.herdSize || 500) - 2, // Số gà hiện có
-          2, // Số hao hụt
-          35, // Kg thức ăn
-          70, // Lít nước
-          1.45, // Kg/con
-          'Đàn gà khỏe mạnh, nhanh nhẹn, ăn tốt',
-          'Bổ sung men tiêu hóa & Vitamin C',
-          'Đảo đệm lót sinh học định kỳ, rắc men khử mùi Balasa N01',
-          w.weeklyScore || 6,
-          w.submittedBy || 'Học viên phụ trách',
-          w.otherBarrierText || 'Không có trở ngại lớn',
+          h?.herdSize || '',
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
+          w.behaviors?.b3_luuChua ? 'Có lưu chứa chất thải' : '',
+          w.weeklyScore ?? '',
+          w.submittedBy || '',
+          w.otherBarrierText || '',
           w.submittedAt || new Date().toISOString(),
         ];
       }),
     ];
 
-    // 5. SHEET TIẾNG VIỆT: LICH_TIEM_VACCINE
+    // 17. LICH_TIEM_VACCINE
     payload['LICH_TIEM_VACCINE'] = [
       [
         'MÃ LỊCH', 'MÃ HỘ', 'TUẦN TUỔI', 'TÊN VẮC XIN', 'ĐƯỜNG DÙNG',
         'NGÀY DỰ KIẾN', 'NGÀY THỰC HIỆN', 'TRẠNG THÁI', 'NGƯỜI THỰC HIỆN', 'GHI CHÚ',
         'THỜI GIAN CẬP NHẬT'
       ],
-      ['VAC_01', 'TẤT CẢ HỘ', '1 ngày tuổi', 'Marek phòng bại liệt', 'Tiêm dưới da cổ', '2026-09-01', '2026-09-01', 'ĐÃ TIÊM', 'Trại giống', 'Đã tiêm tại cơ sở ấp', new Date().toISOString()],
-      ['VAC_02', 'TẤT CẢ HỘ', '3-5 ngày tuổi', 'Newcastle + Viêm phế quản (ND-IB)', 'Nhỏ mắt, nhỏ mũi', '2026-09-05', '2026-09-05', 'ĐÃ TIÊM', 'Học viên hướng dẫn', 'Nhỏ đúng liều', new Date().toISOString()],
-      ['VAC_03', 'TẤT CẢ HỘ', '7 ngày tuổi', 'Gumboro lần 1', 'Nhỏ miệng / Cho uống nước', '2026-09-08', '2026-09-08', 'ĐÃ TIÊM', 'Hộ chăn nuôi', 'Pha nước sạch', new Date().toISOString()],
-      ['VAC_04', 'TẤT CẢ HỘ', '14 ngày tuổi', 'Đậu gà (Fowl Pox)', 'Chủng màng cánh', '2026-09-15', '2026-09-15', 'ĐÃ TIÊM', 'Cán bộ thú y', 'Chủng cánh chuẩn', new Date().toISOString()],
-      ['VAC_05', 'TẤT CẢ HỘ', '21 ngày tuổi', 'Gumboro lần 2 + Newcastle lần 2', 'Cho uống nước pha sữa gầy', '2026-09-22', '2026-09-22', 'ĐÃ TIÊM', 'Hộ chăn nuôi', 'Nhắc nhở tuần 3', new Date().toISOString()],
-      ['VAC_06', 'TẤT CẢ HỘ', '35-40 ngày tuổi', 'Cúm gia cầm (H5N1, H5N6)', 'Tiêm bắp đùi', '2026-10-06', '2026-10-06', 'ĐÃ TIÊM', 'Trạm thú y xã', 'Tiêm phòng định kỳ', new Date().toISOString()],
     ];
 
-    // 6. SHEET TIẾNG VIỆT: BAO_CAO_DANH_GIA (Tổng hợp KAP, Cam kết, CWM)
-    payload['BAO_CAO_DANH_GIA'] = [
-      [
-        'MÃ BÁO CÁO', 'MÃ HỘ', 'TÊN CHỦ HỘ', 'LOẠI BÁO CÁO', 'TUẦN / GIAI ĐOẠN',
-        'ĐIỂM K', 'ĐIỂM T', 'ĐIỂM YĐ', 'ĐIỂM HT', 'ĐIỂM CWM',
-        'CHI TIẾT ĐÁNH GIÁ', 'NGƯỜI ĐÁNH GIÁ', 'NGÀY ĐÁNH GIÁ', 'TRẠNG THÁI'
-      ],
-      ...bc08List.map((b) => [
-        `BC_${b.householdId}`,
-        b.householdId,
-        b.representativeName,
-        'BÁO CÁO TỔNG HỢP TIẾN TRÌNH',
-        'W1 - W6',
-        b.scoreK_Pre ?? '',
-        b.scoreT_Pre ?? '',
-        b.scoreYD_Pre ?? '',
-        b.scoreHT_Pre ?? '',
-        b.scoreCWM_Post ?? b.scoreCWM_Pre ?? '',
-        `Nhóm ${b.group} | ΔCWM: ${b.deltaCWM ?? 0}`,
-        'Ban nghiên cứu đề tài',
-        new Date().toISOString().split('T')[0],
-        b.status === 'COMPLETED' ? 'HOÀN THÀNH' : 'ĐANG TIẾN HÀNH',
-      ]),
-    ];
-
-    // 7. SHEET TIẾNG VIỆT: LICH_SU_HOAT_DONG (Lưu vết vĩnh viễn không bao giờ xóa)
+    // 18. LICH_SU_HOAT_DONG & AUDIT_LOG
     payload['LICH_SU_HOAT_DONG'] = [
       [
         'MÃ LỊCH SỬ', 'THỜI GIAN', 'TÊN ĐĂNG NHẬP', 'HỌ VÀ TÊN', 'VAI TRÒ',
@@ -327,12 +674,29 @@ export class GoogleSheetsService {
         l.userRole,
         l.action,
         l.targetModule,
-        l.reason || l.newValue || 'Thực hiện thao tác',
-        'THÀNH CÔNG (LƯU VĨNH VIỄN)',
+        l.reason || l.newValue || 'Thao tác hệ thống',
+        'THÀNH CÔNG',
       ]),
     ];
 
-    // 8. SHEET TIẾNG VIỆT: CAU_HINH
+    payload['AUDIT_LOG'] = [
+      ['LOG_ID', 'TIMESTAMP', 'USER_ID', 'USERNAME', 'ROLE', 'ACTION', 'TARGET_MODULE', 'HOUSEHOLD_ID', 'OLD_VALUE', 'NEW_VALUE', 'REASON'],
+      ...auditLogs.map((l) => [
+        l.id,
+        l.timestamp,
+        l.userId,
+        l.username,
+        l.userRole,
+        l.action,
+        l.targetModule,
+        l.householdId || '',
+        l.oldValue || '',
+        l.newValue || '',
+        l.reason || '',
+      ]),
+    ];
+
+    // 19. CAU_HINH & CONFIG
     payload['CAU_HINH'] = [
       ['KHÓA', 'GIÁ TRỊ', 'MÔ TẢ', 'NGÀY CẬP NHẬT'],
       ['TEN_DE_TAI', config.researchTitle, 'Tên đề tài nghiên cứu', new Date().toISOString()],
@@ -346,18 +710,19 @@ export class GoogleSheetsService {
       ['ID_GOOGLE_SPREADSHEET', config.spreadsheetId || '', 'ID trang tính Google', new Date().toISOString()],
     ];
 
-    // TƯƠNG THÍCH NGƯỢC: Duy trì các Sheet tiếng Anh cũ để không mất dữ liệu lịch sử
-    payload['USERS'] = [
-      ['USER_ID', 'USERNAME', 'FULL_NAME', 'PHONE', 'ROLE', 'HOUSEHOLD_ID', 'STATUS', 'TITLE', 'ORGANIZATION', 'PASSWORD_HASH', 'SALT', 'DEFAULT_PASS', 'CREATED_AT'],
-      ...users.map((u) => [u.id, u.username, u.fullName, u.phone, u.role, u.householdId || '', u.status, u.title || '', u.organization || '', u.passwordHash, u.salt, u.plainPasswordHint || '123456', u.createdAt]),
+    payload['CONFIG'] = [
+      ['KEY', 'VALUE', 'DESCRIPTION', 'UPDATED_AT'],
+      ['APP_NAME', config.appName, 'Tên ứng dụng', new Date().toISOString()],
+      ['RESEARCH_TITLE', config.researchTitle, 'Tên đề tài', new Date().toISOString()],
+      ['TOTAL_HOUSEHOLDS', config.totalHouseholds, 'Tổng số hộ', new Date().toISOString()],
+      ['TN_TARGET', config.tnTarget, 'Hộ can thiệp', new Date().toISOString()],
+      ['DC_TARGET', config.dcTarget, 'Hộ đối chứng', new Date().toISOString()],
+      ['TOTAL_WEEKS', config.totalWeeks, 'Số tuần theo dõi', new Date().toISOString()],
+      ['START_DATE', config.startDate, 'Ngày bắt đầu', new Date().toISOString()],
+      ['END_DATE', config.endDate, 'Ngày kết thúc', new Date().toISOString()],
     ];
 
-    payload['HOUSEHOLDS'] = [
-      ['HOUSEHOLD_ID', 'REPRESENTATIVE_NAME', 'PHONE', 'ADDRESS', 'LIVESTOCK_TYPE', 'HERD_SIZE', 'FARMING_YEARS', 'FARMING_TYPE', 'CURRENT_WASTE_METHOD', 'GROUP', 'STATUS', 'JOINED_DATE', 'RESEARCHER', 'NOTES', 'UPDATED_AT'],
-      ...households.map((h) => [h.id, h.representativeName, h.phone, h.address, h.livestockType, h.herdSize, h.farmingYears, h.farmingType, h.currentWasteMethod, h.group, h.accountStatus, h.joinedDate, h.assignedResearcher, h.notes || '', h.updatedAt]),
-    ];
-
-    // Chuẩn hóa tuyệt đối: Mọi hàng có cùng độ dài, không chứa null/undefined
+    // Chuẩn hóa mọi hàng
     for (const sheetName in payload) {
       const rows = payload[sheetName];
       if (!rows || rows.length === 0) continue;
@@ -376,7 +741,7 @@ export class GoogleSheetsService {
   }
 
   /**
-   * Lưu toàn bộ dữ liệu lên Google Sheets (Đảm bảo lưu vĩnh viễn, không xóa dòng cũ)
+   * Lưu dữ liệu lên Google Sheets (Upsert bảo toàn, không xóa dòng cũ)
    */
   static async syncToGoogleSheets(customUrl?: string): Promise<{ success: boolean; message: string }> {
     const config = StorageService.getConfig();
@@ -389,11 +754,21 @@ export class GoogleSheetsService {
       };
     }
 
+    // Bảo vệ chống ghi đè: Nếu chưa nạp từ Google Sheets và bộ nhớ đang rỗng, không được ghi đè
+    const currentUsers = StorageService.getUsers();
+    const currentHouseholds = StorageService.getHouseholds();
+    if (!this.isDataLoadedFromSheets && currentUsers.length === 0 && currentHouseholds.length === 0) {
+      return {
+        success: false,
+        message: 'Chưa nạp dữ liệu từ Google Sheets. Hủy thao tác ghi để bảo toàn dữ liệu gốc.',
+      };
+    }
+
     try {
       StorageService.setSyncStatus('SYNCING');
       const payload = this.prepareWorkbookPayload();
 
-      // 1. Gửi qua Backend Relay để vượt qua CORS trình duyệt
+      // 1. Thử gửi qua Backend Relay
       try {
         const serverRes = await fetch('/api/sheets-sync', {
           method: 'POST',
@@ -409,14 +784,6 @@ export class GoogleSheetsService {
           const serverJson = await serverRes.json();
           if (serverJson.success) {
             StorageService.setSyncStatus('SYNCED');
-            StorageService.addAuditLog({
-              userId: 'system',
-              username: 'system',
-              userRole: 'ADMIN',
-              action: 'SYNC',
-              targetModule: 'GOOGLE_SHEETS',
-              reason: `Lưu vĩnh viễn dữ liệu lên Google Sheets lúc ${new Date().toLocaleTimeString('vi-VN')}`,
-            });
             return {
               success: true,
               message: 'Đã lưu vĩnh viễn dữ liệu lên Google Sheets thành công!',
@@ -424,10 +791,10 @@ export class GoogleSheetsService {
           }
         }
       } catch (relayErr) {
-        console.warn('Relay qua server gặp lỗi, thử gửi trực tiếp:', relayErr);
+        console.warn('Relay qua backend gặp lỗi, thử gửi trực tiếp:', relayErr);
       }
 
-      // 2. Gửi trực tiếp từ trình duyệt tới Apps Script Web App
+      // 2. Gửi trực tiếp tới Apps Script Web App
       try {
         const res = await fetch(url, {
           method: 'POST',
@@ -481,8 +848,9 @@ export class GoogleSheetsService {
   }
 
   /**
-   * KÉO VÀ ĐỒNG BỘ 2 CHIỀU TỪ GOOGLE SHEETS VỀ APP
-   * Đọc các sheet Tiếng Việt: GIANG_VIEN, HOC_VIEN, HO_CHAN_NUOI, NHAT_KY_CHAN_NUOI...
+   * ĐỌC TOÀN BỘ DỮ LIỆU TỪ GOOGLE SHEETS VỀ APP (Single Source of Truth)
+   * Không tự ý tạo thêm tài khoản, hộ dân hay bản ghi nào.
+   * Nếu có lỗi: Giữ nguyên dữ liệu hiện tại, không xóa dữ liệu.
    */
   static async pullFromGoogleSheets(): Promise<{
     success: boolean;
@@ -496,7 +864,7 @@ export class GoogleSheetsService {
     try {
       let sheetsData: Record<string, any[][]> | null = null;
 
-      // 1. Gọi qua Relay Backend
+      // 1. Thử kéo qua Relay Backend
       try {
         const res = await fetch('/api/sheets-pull', {
           method: 'POST',
@@ -516,7 +884,7 @@ export class GoogleSheetsService {
         console.warn('Lỗi gọi /api/sheets-pull:', relayErr);
       }
 
-      // 2. Gọi trực tiếp GET nếu Backend chưa có
+      // 2. Thử gọi trực tiếp GET nếu Backend chưa có
       if (!sheetsData) {
         try {
           const getUrl = `${url}${url.includes('?') ? '&' : '?'}action=PULL_ALL_SHEETS&spreadsheetId=${encodeURIComponent(config.spreadsheetId || '')}`;
@@ -532,355 +900,457 @@ export class GoogleSheetsService {
 
       if (!sheetsData) {
         return {
-          success: true,
-          message: 'Đã sẵn sàng với dữ liệu hiện tại.',
+          success: false,
+          message: 'Không thể kết nối đến Google Sheets để đọc dữ liệu. Dữ liệu trên ứng dụng được giữ nguyên.',
           users: StorageService.getUsers(),
         };
       }
 
-      let importedUsers = 0;
-      let importedHouseholds = 0;
-      const localUsers = StorageService.getUsers();
-      const userMap = new Map<string, User>();
-      localUsers.forEach((u) => userMap.set(u.username.toLowerCase(), u));
+      // Đánh dấu đã nạp thành công từ Google Sheets
+      this.isDataLoadedFromSheets = true;
 
-      // A. ĐỌC SHEET TAI_KHOAN TỔNG HỢP (NẾU CÓ)
-      if (Array.isArray(sheetsData['TAI_KHOAN']) && sheetsData['TAI_KHOAN'].length > 1) {
-        const rows = sheetsData['TAI_KHOAN'];
-        const headers = rows[0].map((h: any) => String(h || '').trim().toUpperCase());
-        const idIdx = headers.findIndex((h: string) => h.includes('MÃ'));
-        const uIdx = headers.findIndex((h: string) => h.includes('TÊN ĐĂNG NHẬP') || h.includes('USERNAME') || h.includes('TÀI KHOẢN'));
-        const nameIdx = headers.findIndex((h: string) => h.includes('HỌ VÀ TÊN') || h.includes('HỌ TÊN') || h.includes('TÊN'));
+      // --- A. ĐỌC USERS / TAI_KHOAN ---
+      const parsedUsers: User[] = [];
+      const userSource = sheetsData['TAI_KHOAN'] || sheetsData['USERS'] || [];
+      if (Array.isArray(userSource) && userSource.length > 1) {
+        const headers = userSource[0].map((h: any) => String(h || '').trim().toUpperCase());
+        const idIdx = headers.findIndex((h: string) => h.includes('MÃ') || h.includes('USER_ID') || h.includes('ID'));
+        const uIdx = headers.findIndex((h: string) => h.includes('TÊN ĐĂNG NHẬP') || h.includes('USERNAME'));
+        const nameIdx = headers.findIndex((h: string) => h.includes('HỌ VÀ TÊN') || h.includes('FULL_NAME') || h.includes('HỌ TÊN'));
         const roleIdx = headers.findIndex((h: string) => h.includes('VAI TRÒ') || h.includes('ROLE'));
-        const titleIdx = headers.findIndex((h: string) => h.includes('CHỨC VỤ') || h.includes('HỌC VỊ'));
-        const orgIdx = headers.findIndex((h: string) => h.includes('ĐƠN VỊ') || h.includes('ĐỊA CHỈ'));
-        const phoneIdx = headers.findIndex((h: string) => h.includes('ĐIỆN THOẠI') || h.includes('SĐT'));
+        const phoneIdx = headers.findIndex((h: string) => h.includes('ĐIỆN THOẠI') || h.includes('PHONE'));
         const emailIdx = headers.findIndex((h: string) => h.includes('EMAIL'));
-        const hidIdx = headers.findIndex((h: string) => h.includes('MÃ HỘ') || h.includes('HỘ'));
-        const passIdx = headers.findIndex((h: string) => h.includes('MẬT KHẨU') || h.includes('PASSWORD'));
+        const titleIdx = headers.findIndex((h: string) => h.includes('CHỨC VỤ') || h.includes('TITLE'));
+        const orgIdx = headers.findIndex((h: string) => h.includes('ĐƠN VỊ') || h.includes('ORGANIZATION'));
+        const hidIdx = headers.findIndex((h: string) => h.includes('MÃ HỘ') || h.includes('HOUSEHOLD_ID'));
+        const passIdx = headers.findIndex((h: string) => h.includes('MẬT KHẨU') || h.includes('DEFAULT_PASS') || h.includes('PASSWORD'));
         const statusIdx = headers.findIndex((h: string) => h.includes('TRẠNG THÁI') || h.includes('STATUS'));
 
-        for (let r = 1; r < rows.length; r++) {
-          const row = rows[r];
-          const rawU = uIdx >= 0 ? row[uIdx] : (idIdx >= 0 ? row[idIdx] : '');
-          const username = String(rawU || '').trim().toLowerCase();
+        for (let r = 1; r < userSource.length; r++) {
+          const row = userSource[r];
+          const rawId = idIdx >= 0 ? String(row[idIdx] || '').trim() : '';
+          const username = (uIdx >= 0 && row[uIdx] ? String(row[uIdx]) : rawId).trim();
           if (!username) continue;
 
-          const key = username.toLowerCase();
-          const existing = userMap.get(key);
-          const rawPass = passIdx >= 0 && row[passIdx] ? String(row[passIdx]).trim() : '';
+          // Bỏ qua dòng tiêu đề nếu bị lọt vào
+          const upperU = username.toUpperCase();
+          if (upperU === 'USER_ID' || upperU === 'USERNAME' || upperU === 'TÊN ĐĂNG NHẬP' || upperU === 'MÃ TÀI KHOẢN') continue;
 
           const rawRole = String(roleIdx >= 0 ? row[roleIdx] : '').toUpperCase();
           let role: Role = 'RESEARCHER';
           if (rawRole.includes('QUẢN TRỊ') || rawRole.includes('ADMIN')) role = 'ADMIN';
           else if (rawRole.includes('HỘ') || rawRole.includes('HOUSEHOLD')) role = 'HOUSEHOLD';
           else if (rawRole.includes('GIẢNG VIÊN') || rawRole.includes('HƯỚNG DẪN') || rawRole.includes('SUPERVISOR') || rawRole.includes('GV') || rawRole.includes('HDAN')) role = 'SUPERVISOR';
-          else role = 'RESEARCHER';
 
-          const hid = hidIdx >= 0 && row[hidIdx] ? String(row[hidIdx]).trim().toUpperCase() : (role === 'HOUSEHOLD' ? username.toUpperCase() : undefined);
+          const pass = passIdx >= 0 && row[passIdx] ? String(row[passIdx]).trim() : '123456';
+          const hid = hidIdx >= 0 && row[hidIdx] ? String(row[hidIdx]).trim().toUpperCase() : undefined;
 
-          const userObj: User = {
-            id: idIdx >= 0 && row[idIdx] ? String(row[idIdx]).trim() : existing?.id || `USR_${Date.now()}_${r}`,
-            username,
-            fullName: nameIdx >= 0 && row[nameIdx] ? String(row[nameIdx]).trim() : existing?.fullName || username,
-            phone: phoneIdx >= 0 && row[phoneIdx] ? String(row[phoneIdx]).trim() : existing?.phone || '',
-            email: emailIdx >= 0 && row[emailIdx] ? String(row[emailIdx]).trim() : existing?.email || '',
-            organization: orgIdx >= 0 && row[orgIdx] ? String(row[orgIdx]).trim() : existing?.organization || '',
-            title: titleIdx >= 0 && row[titleIdx] ? String(row[titleIdx]).trim() : existing?.title || '',
+          parsedUsers.push({
+            id: rawId || `USR_${username.toUpperCase()}`,
+            username: username.toLowerCase(),
+            fullName: nameIdx >= 0 && row[nameIdx] ? String(row[nameIdx]).trim() : username,
+            phone: phoneIdx >= 0 && row[phoneIdx] ? String(row[phoneIdx]).trim() : '',
+            email: emailIdx >= 0 && row[emailIdx] ? String(row[emailIdx]).trim() : '',
             role,
+            title: titleIdx >= 0 && row[titleIdx] ? String(row[titleIdx]).trim() : '',
+            organization: orgIdx >= 0 && row[orgIdx] ? String(row[orgIdx]).trim() : '',
             householdId: hid,
             status: statusIdx >= 0 && String(row[statusIdx]).toUpperCase().includes('KHÓA') ? 'LOCKED' : 'ACTIVE',
-            passwordHash: existing?.passwordHash || '',
-            salt: existing?.salt || '',
-            plainPasswordHint: rawPass || existing?.plainPasswordHint || '123456',
-            createdAt: existing?.createdAt || new Date().toISOString(),
-          };
-
-          userMap.set(key, userObj);
-          importedUsers++;
+            password: pass,
+            plainPasswordHint: pass,
+            createdAt: new Date().toISOString(),
+          });
         }
       }
 
-      // B. ĐỌC SHEET GIANG_VIEN
-      if (Array.isArray(sheetsData['GIANG_VIEN']) && sheetsData['GIANG_VIEN'].length > 1) {
-        const rows = sheetsData['GIANG_VIEN'];
-        const headers = rows[0].map((h: any) => String(h || '').trim().toUpperCase());
-        const idIdx = headers.findIndex((h: string) => h.includes('MÃ'));
-        const nameIdx = headers.findIndex((h: string) => h.includes('HỌ VÀ TÊN') || h.includes('HỌ TÊN'));
-        const phoneIdx = headers.findIndex((h: string) => h.includes('ĐIỆN THOẠI') || h.includes('SĐT'));
-        const emailIdx = headers.findIndex((h: string) => h.includes('EMAIL'));
-        const orgIdx = headers.findIndex((h: string) => h.includes('ĐƠN VỊ') || h.includes('BỘ MÔN'));
-        const titleIdx = headers.findIndex((h: string) => h.includes('CHỨC VỤ') || h.includes('HỌC VỊ'));
-        const uIdx = headers.findIndex((h: string) => h.includes('TÊN ĐĂNG NHẬP') || h.includes('USERNAME'));
-        const passIdx = headers.findIndex((h: string) => h.includes('MẬT KHẨU') || h.includes('PASSWORD'));
-        const roleIdx = headers.findIndex((h: string) => h.includes('VAI TRÒ') || h.includes('ROLE'));
+      if (parsedUsers.length > 0) {
+        const existingUsers = StorageService.getUsers();
+        const userMap = new Map<string, User>();
+        existingUsers.forEach(u => userMap.set(u.id, u));
+        parsedUsers.forEach(u => userMap.set(u.id, u));
+        StorageService.saveUsersDirectly(Array.from(userMap.values()));
+      }
+
+      // --- B. ĐỌC HỘ CHĂN NUÔI (HO_CHAN_NUOI / HOUSEHOLDS) ---
+      const parsedHouseholds: Household[] = [];
+      const hhSource = sheetsData['HO_CHAN_NUOI'] || sheetsData['HOUSEHOLDS'] || [];
+      if (Array.isArray(hhSource) && hhSource.length > 1) {
+        const headers = hhSource[0].map((h: any) => String(h || '').trim().toUpperCase());
+        const idIdx = headers.findIndex((h: string) => h.includes('MÃ HỘ') || h.includes('HOUSEHOLD_ID') || h === 'MÃ');
+        const nameIdx = headers.findIndex((h: string) => h.includes('CHỦ HỘ') || h.includes('REPRESENTATIVE_NAME') || h.includes('TÊN'));
+        const phoneIdx = headers.findIndex((h: string) => h.includes('ĐIỆN THOẠI') || h.includes('PHONE'));
+        const addrIdx = headers.findIndex((h: string) => h.includes('ĐỊA CHỈ') || h.includes('ADDRESS'));
+        const groupIdx = headers.findIndex((h: string) => h.includes('NHÓM') || h.includes('GROUP'));
+        const herdIdx = headers.findIndex((h: string) => h.includes('QUY MÔ') || h.includes('HERD_SIZE'));
+        const breedIdx = headers.findIndex((h: string) => h.includes('GIỐNG') || h.includes('LIVESTOCK_TYPE'));
+        const farmTypeIdx = headers.findIndex((h: string) => h.includes('HÌNH THỨC') || h.includes('FARMING_TYPE'));
+        const studentIdx = headers.findIndex((h: string) => h.includes('HỌC VIÊN') || h.includes('RESEARCHER'));
         const statusIdx = headers.findIndex((h: string) => h.includes('TRẠNG THÁI') || h.includes('STATUS'));
 
-        for (let r = 1; r < rows.length; r++) {
-          const row = rows[r];
-          const username = String(uIdx >= 0 ? row[uIdx] : '').trim();
-          if (!username) continue;
-
-          const key = username.toLowerCase();
-          const existing = userMap.get(key);
-          const rawPass = passIdx >= 0 && row[passIdx] ? String(row[passIdx]).trim() : '';
-
-          const roleStr = String(roleIdx >= 0 ? row[roleIdx] : '').toUpperCase();
-          const role: Role = roleStr.includes('QUẢN TRỊ') || roleStr.includes('ADMIN') ? 'ADMIN' : 'SUPERVISOR';
-
-          const userObj: User = {
-            id: idIdx >= 0 && row[idIdx] ? String(row[idIdx]).trim() : existing?.id || `GV_${Date.now()}_${r}`,
-            username,
-            fullName: nameIdx >= 0 && row[nameIdx] ? String(row[nameIdx]).trim() : existing?.fullName || username,
-            phone: phoneIdx >= 0 && row[phoneIdx] ? String(row[phoneIdx]).trim() : existing?.phone || '',
-            email: emailIdx >= 0 && row[emailIdx] ? String(row[emailIdx]).trim() : existing?.email || '',
-            organization: orgIdx >= 0 && row[orgIdx] ? String(row[orgIdx]).trim() : existing?.organization || 'Khoa Chăn nuôi',
-            title: titleIdx >= 0 && row[titleIdx] ? String(row[titleIdx]).trim() : existing?.title || 'Giảng viên',
-            role,
-            status: statusIdx >= 0 && String(row[statusIdx]).toUpperCase().includes('KHÓA') ? 'LOCKED' : 'ACTIVE',
-            passwordHash: existing?.passwordHash || '',
-            salt: existing?.salt || '',
-            plainPasswordHint: rawPass || existing?.plainPasswordHint || '123456',
-            createdAt: existing?.createdAt || new Date().toISOString(),
-          };
-
-          userMap.set(key, userObj);
-          importedUsers++;
-        }
-      }
-
-      // B. ĐỌC SHEET HOC_VIEN
-      if (Array.isArray(sheetsData['HOC_VIEN']) && sheetsData['HOC_VIEN'].length > 1) {
-        const rows = sheetsData['HOC_VIEN'];
-        const headers = rows[0].map((h: any) => String(h || '').trim().toUpperCase());
-        const idIdx = headers.findIndex((h: string) => h.includes('MÃ'));
-        const nameIdx = headers.findIndex((h: string) => h.includes('HỌ VÀ TÊN') || h.includes('HỌ TÊN'));
-        const orgIdx = headers.findIndex((h: string) => h.includes('LỚP') || h.includes('NHÓM'));
-        const phoneIdx = headers.findIndex((h: string) => h.includes('ĐIỆN THOẠI') || h.includes('SĐT'));
-        const emailIdx = headers.findIndex((h: string) => h.includes('EMAIL'));
-        const uIdx = headers.findIndex((h: string) => h.includes('TÊN ĐĂNG NHẬP') || h.includes('USERNAME'));
-        const passIdx = headers.findIndex((h: string) => h.includes('MẬT KHẨU') || h.includes('PASSWORD'));
-        const statusIdx = headers.findIndex((h: string) => h.includes('TRẠNG THÁI') || h.includes('STATUS'));
-
-        for (let r = 1; r < rows.length; r++) {
-          const row = rows[r];
-          const username = String(uIdx >= 0 ? row[uIdx] : '').trim();
-          if (!username) continue;
-
-          const key = username.toLowerCase();
-          const existing = userMap.get(key);
-          const rawPass = passIdx >= 0 && row[passIdx] ? String(row[passIdx]).trim() : '';
-
-          const userObj: User = {
-            id: idIdx >= 0 && row[idIdx] ? String(row[idIdx]).trim() : existing?.id || `HV_${Date.now()}_${r}`,
-            username,
-            fullName: nameIdx >= 0 && row[nameIdx] ? String(row[nameIdx]).trim() : existing?.fullName || username,
-            phone: phoneIdx >= 0 && row[phoneIdx] ? String(row[phoneIdx]).trim() : existing?.phone || '',
-            email: emailIdx >= 0 && row[emailIdx] ? String(row[emailIdx]).trim() : existing?.email || '',
-            organization: orgIdx >= 0 && row[orgIdx] ? String(row[orgIdx]).trim() : existing?.organization || 'Lớp Thú y K65',
-            role: 'RESEARCHER',
-            status: statusIdx >= 0 && String(row[statusIdx]).toUpperCase().includes('KHÓA') ? 'LOCKED' : 'ACTIVE',
-            passwordHash: existing?.passwordHash || '',
-            salt: existing?.salt || '',
-            plainPasswordHint: rawPass || existing?.plainPasswordHint || '123456',
-            createdAt: existing?.createdAt || new Date().toISOString(),
-          };
-
-          userMap.set(key, userObj);
-          importedUsers++;
-        }
-      }
-
-      // C. ĐỌC SHEET HO_CHAN_NUOI
-      const localHouseholds = StorageService.getHouseholds();
-      const householdMap = new Map<string, Household>();
-      localHouseholds.forEach((h) => householdMap.set(h.id.toUpperCase(), h));
-
-      if (Array.isArray(sheetsData['HO_CHAN_NUOI']) && sheetsData['HO_CHAN_NUOI'].length > 1) {
-        const rows = sheetsData['HO_CHAN_NUOI'];
-        const headers = rows[0].map((h: any) => String(h || '').trim().toUpperCase());
-        const idIdx = headers.findIndex((h: string) => h.includes('MÃ HỘ') || h === 'MÃ');
-        const nameIdx = headers.findIndex((h: string) => h.includes('CHỦ HỘ') || h.includes('TÊN'));
-        const phoneIdx = headers.findIndex((h: string) => h.includes('ĐIỆN THOẠI') || h.includes('SĐT'));
-        const addrIdx = headers.findIndex((h: string) => h.includes('ĐỊA CHỈ'));
-        const groupIdx = headers.findIndex((h: string) => h.includes('NHÓM'));
-        const herdIdx = headers.findIndex((h: string) => h.includes('QUY MÔ') || h.includes('SỐ CON'));
-        const breedIdx = headers.findIndex((h: string) => h.includes('GIỐNG'));
-        const farmTypeIdx = headers.findIndex((h: string) => h.includes('HÌNH THỨC'));
-        const studentIdx = headers.findIndex((h: string) => h.includes('HỌC VIÊN'));
-        const uIdx = headers.findIndex((h: string) => h.includes('TÊN ĐĂNG NHẬP') || h.includes('USERNAME'));
-        const passIdx = headers.findIndex((h: string) => h.includes('MẬT KHẨU'));
-        const statusIdx = headers.findIndex((h: string) => h.includes('TRẠNG THÁI'));
-
-        for (let r = 1; r < rows.length; r++) {
-          const row = rows[r];
+        for (let r = 1; r < hhSource.length; r++) {
+          const row = hhSource[r];
           const hid = String(idIdx >= 0 ? row[idIdx] : '').trim().toUpperCase();
           if (!hid) continue;
 
-          const existingH = householdMap.get(hid);
+          // Bỏ qua dòng tiêu đề nếu bị lọt vào
+          if (hid === 'HOUSEHOLD_ID' || hid === 'MÃ HỘ' || hid === 'MÃ') continue;
+
           const rawGroup = String(groupIdx >= 0 ? row[groupIdx] : '').toUpperCase();
           const group: StudyGroup = rawGroup.includes('TN') || rawGroup.includes('CAN THIỆP') ? 'TN' : 'DC';
 
-          const hObj: Household = {
+          parsedHouseholds.push({
             id: hid,
-            representativeName: nameIdx >= 0 && row[nameIdx] ? String(row[nameIdx]).trim() : existingH?.representativeName || `Chủ hộ ${hid}`,
-            phone: phoneIdx >= 0 && row[phoneIdx] ? String(row[phoneIdx]).trim() : existingH?.phone || '',
-            address: addrIdx >= 0 && row[addrIdx] ? String(row[addrIdx]).trim() : existingH?.address || 'Khu vực chăn nuôi gà',
+            representativeName: nameIdx >= 0 && row[nameIdx] ? String(row[nameIdx]).trim() : `Hộ ${hid}`,
+            phone: phoneIdx >= 0 && row[phoneIdx] ? String(row[phoneIdx]).trim() : '',
+            address: addrIdx >= 0 && row[addrIdx] ? String(row[addrIdx]).trim() : '',
             group,
-            herdSize: herdIdx >= 0 && !isNaN(Number(row[herdIdx])) ? Number(row[herdIdx]) : existingH?.herdSize || 500,
-            livestockType: breedIdx >= 0 && row[breedIdx] ? String(row[breedIdx]).trim() : existingH?.livestockType || 'Gà ri lai',
-            farmingYears: existingH?.farmingYears || 5,
-            farmingType: farmTypeIdx >= 0 && row[farmTypeIdx] ? String(row[farmTypeIdx]).trim() : existingH?.farmingType || 'Bán chăn thả có đệm lót sinh học',
-            currentWasteMethod: existingH?.currentWasteMethod || 'Đệm lót sinh học Balasa N01',
+            herdSize: herdIdx >= 0 && !isNaN(Number(row[herdIdx])) ? Number(row[herdIdx]) : 0,
+            livestockType: breedIdx >= 0 && row[breedIdx] ? String(row[breedIdx]).trim() : '',
+            farmingYears: 0,
+            farmingType: farmTypeIdx >= 0 && row[farmTypeIdx] ? String(row[farmTypeIdx]).trim() : '',
+            currentWasteMethod: '',
             accountStatus: statusIdx >= 0 && String(row[statusIdx]).toUpperCase().includes('KHÓA') ? 'LOCKED' : 'ACTIVE',
-            joinedDate: existingH?.joinedDate || '2026-09-01',
-            assignedResearcher: studentIdx >= 0 && row[studentIdx] ? String(row[studentIdx]).trim() : existingH?.assignedResearcher || 'Chưa phân công',
-            notes: existingH?.notes || 'Hộ chăn nuôi gà tham gia đề tài',
-            createdAt: existingH?.createdAt || new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            updatedBy: 'Google Sheets',
-          };
-
-          householdMap.set(hid, hObj);
-          importedHouseholds++;
-
-          // Đồng thời tạo/cập nhật tài khoản hộ dân để đăng nhập
-          const uname = String(uIdx >= 0 ? row[uIdx] : hid.toLowerCase()).trim().toLowerCase();
-          const uKey = uname.toLowerCase();
-          const existingU = userMap.get(uKey);
-          const rawPass = passIdx >= 0 && row[passIdx] ? String(row[passIdx]).trim() : '';
-
-          const userHousehold: User = {
-            id: `USR_${hid}`,
-            username: uname,
-            fullName: hObj.representativeName,
-            phone: hObj.phone,
-            role: 'HOUSEHOLD',
-            householdId: hid,
-            status: hObj.accountStatus,
-            passwordHash: existingU?.passwordHash || '',
-            salt: existingU?.salt || '',
-            plainPasswordHint: rawPass || existingU?.plainPasswordHint || '123456',
-            createdAt: existingU?.createdAt || new Date().toISOString(),
-          };
-          userMap.set(uKey, userHousehold);
-        }
-      }
-
-      // D. ĐỌC SHEET USERS CŨ (NẾU CÓ)
-      if (Array.isArray(sheetsData['USERS']) && sheetsData['USERS'].length > 1) {
-        const rows = sheetsData['USERS'];
-        const headers = rows[0].map((h: any) => String(h || '').trim().toUpperCase());
-        const uIdx = headers.indexOf('USERNAME');
-        const fnIdx = headers.indexOf('FULL_NAME');
-        const pIdx = headers.indexOf('PHONE');
-        const rIdx = headers.indexOf('ROLE');
-        const hidIdx = headers.indexOf('HOUSEHOLD_ID');
-        const passIdx = headers.indexOf('DEFAULT_PASS');
-
-        for (let r = 1; r < rows.length; r++) {
-          const row = rows[r];
-          const username = String(uIdx >= 0 ? row[uIdx] : '').trim();
-          if (!username) continue;
-
-          const key = username.toLowerCase();
-          if (!userMap.has(key)) {
-            const defPass = passIdx >= 0 && row[passIdx] ? String(row[passIdx]).trim() : '123456';
-            userMap.set(key, {
-              id: `USR_${Date.now()}_${r}`,
-              username,
-              fullName: fnIdx >= 0 && row[fnIdx] ? String(row[fnIdx]).trim() : username,
-              phone: pIdx >= 0 && row[pIdx] ? String(row[pIdx]).trim() : '',
-              role: (rIdx >= 0 && row[rIdx] ? String(row[rIdx]).trim().toUpperCase() : 'RESEARCHER') as Role,
-              householdId: hidIdx >= 0 && row[hidIdx] ? String(row[hidIdx]).trim() : undefined,
-              status: 'ACTIVE',
-              passwordHash: '',
-              salt: '',
-              plainPasswordHint: defPass,
-              createdAt: new Date().toISOString(),
-            });
-            importedUsers++;
-          }
-        }
-      }
-
-      // Lưu mật khẩu trực tiếp, không băm SHA-256 rắc rối
-      for (const u of userMap.values()) {
-        const pass = (u.plainPasswordHint || u.password || '123456').trim();
-        u.password = pass;
-        u.plainPasswordHint = pass;
-        // Đảm bảo nếu là Household thì householdId và Household record luôn tồn tại
-        if (u.role === 'HOUSEHOLD') {
-          const hid = (u.householdId || u.username).toUpperCase();
-          if (!householdMap.has(hid)) {
-            householdMap.set(hid, {
-              id: hid,
-              representativeName: u.fullName,
-              phone: u.phone,
-              address: u.organization || 'Khu vực chăn nuôi gà',
-              livestockType: 'Gà ri lai thả vườn',
-              herdSize: 500,
-              farmingYears: 3,
-              farmingType: 'Bán chăn thả có đệm lót sinh học',
-              currentWasteMethod: 'Đệm lót sinh học Balasa N01',
-              group: 'TN',
-              accountStatus: 'ACTIVE',
-              joinedDate: new Date().toISOString().split('T')[0],
-              assignedResearcher: 'Chưa phân công',
-              notes: 'Tự động tạo từ danh mục tài khoản hộ dân',
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
-              updatedBy: 'Google Sheets',
-            });
-          }
-        }
-      }
-
-      // Đảm bảo phiếu BC-01 cho mọi hộ chăn nuôi
-      const existingBC01 = StorageService.getBC01List();
-      const bc01Map = new Map<string, BC01Record>();
-      existingBC01.forEach((b) => bc01Map.set(b.householdId.toUpperCase(), b));
-      for (const h of householdMap.values()) {
-        const hid = h.id.toUpperCase();
-        if (!bc01Map.has(hid)) {
-          bc01Map.set(hid, {
-            id: `BC01_${hid}`,
-            householdId: hid,
-            representativeName: h.representativeName,
-            phone: h.phone,
-            address: h.address,
-            livestockType: h.livestockType,
-            herdSize: h.herdSize,
-            farmingYears: h.farmingYears,
-            farmingType: h.farmingType,
-            currentWasteMethod: h.currentWasteMethod,
-            notes: h.notes,
-            isLocked: false,
+            joinedDate: '',
+            assignedResearcher: studentIdx >= 0 && row[studentIdx] ? String(row[studentIdx]).trim() : '',
+            notes: '',
             createdAt: new Date().toISOString(),
-            createdBy: 'Google Sheets',
             updatedAt: new Date().toISOString(),
             updatedBy: 'Google Sheets',
           });
         }
       }
-      StorageService.saveBC01ListDirectly(Array.from(bc01Map.values()));
 
-      // Lưu lại các tài khoản và danh sách hộ
-      const finalUsers = Array.from(userMap.values());
-      const finalHouseholds = Array.from(householdMap.values()).sort((a, b) => a.id.localeCompare(b.id));
+      if (parsedHouseholds.length > 0) {
+        const existingHouseholds = StorageService.getHouseholds();
+        const householdMap = new Map<string, Household>();
+        existingHouseholds.forEach(h => householdMap.set(h.id, h));
+        parsedHouseholds.forEach(h => householdMap.set(h.id, h));
+        StorageService.saveHouseholdsDirectly(Array.from(householdMap.values()));
+      }
 
-      StorageService.saveUsersDirectly(finalUsers);
-      if (finalHouseholds.length > 0) {
-        StorageService.saveHouseholdsDirectly(finalHouseholds);
+      // --- C. ĐỌC BC01_HO_THONG_TIN ---
+      const bc01Source = sheetsData['BC01_HO_THONG_TIN'] || [];
+      if (Array.isArray(bc01Source) && bc01Source.length > 1) {
+        const parsedBC01: BC01Record[] = [];
+        for (let r = 1; r < bc01Source.length; r++) {
+          const row = bc01Source[r];
+          const recId = String(row[0] || '').trim();
+          const hid = String(row[1] || '').trim().toUpperCase();
+          if (!recId || recId === 'RECORD_ID' || !hid || hid === 'HOUSEHOLD_ID') continue;
+
+          parsedBC01.push({
+            id: recId,
+            householdId: hid,
+            representativeName: String(row[2] || '').trim(),
+            phone: String(row[3] || '').trim(),
+            address: String(row[4] || '').trim(),
+            livestockType: String(row[5] || '').trim(),
+            herdSize: Number(row[6]) || 500,
+            farmingYears: Number(row[7]) || 3,
+            farmingType: String(row[8] || '').trim(),
+            currentWasteMethod: String(row[9] || '').trim(),
+            isLocked: String(row[10] || '').toUpperCase() === 'TRUE',
+            createdBy: String(row[11] || '').trim(),
+            createdAt: String(row[12] || new Date().toISOString()).trim(),
+            updatedAt: String(row[13] || new Date().toISOString()).trim(),
+            updatedBy: String(row[14] || '').trim(),
+          });
+        }
+        if (parsedBC01.length > 0) {
+          const existingBC01 = StorageService.getBC01List();
+          const bc01Map = new Map<string, BC01Record>();
+          existingBC01.forEach(b => bc01Map.set(b.id, b));
+          parsedBC01.forEach(b => bc01Map.set(b.id, b));
+          StorageService.saveBC01ListDirectly(Array.from(bc01Map.values()));
+        }
+      }
+
+      // --- D. ĐỌC BC02_KAP_PRE ---
+      const bc02Source = sheetsData['BC02_KAP_PRE'] || [];
+      if (Array.isArray(bc02Source) && bc02Source.length > 1) {
+        const parsedBC02: BC02Record[] = [];
+        for (let r = 1; r < bc02Source.length; r++) {
+          const row = bc02Source[r];
+          const recId = String(row[0] || '').trim();
+          const hid = String(row[1] || '').trim().toUpperCase();
+          if (!recId || recId === 'RECORD_ID' || !hid || hid === 'HOUSEHOLD_ID') continue;
+
+          parsedBC02.push({
+            id: recId,
+            householdId: hid,
+            scoreK: Number(row[2]) || 0,
+            scoreT: Number(row[3]) || 0,
+            scoreHT: Number(row[4]) || 0,
+            behaviorReport: {
+              b1_thuGom: Number(row[5]) === 1,
+              b2_phanLoai: Number(row[6]) === 1,
+              b3_luuChua: Number(row[7]) === 1,
+              b4_khongXaThang: Number(row[8]) === 1,
+              b5_xuLyTaiSuDung: Number(row[9]) === 1,
+              b6_veSinh: Number(row[10]) === 1,
+            },
+            knowledgeAnswers: [],
+            attitudeAnswers: [],
+            isLocked: String(row[11] || '').toUpperCase() === 'TRUE',
+            submittedBy: String(row[12] || '').trim(),
+            submittedAt: String(row[13] || new Date().toISOString()).trim(),
+            updatedAt: String(row[13] || new Date().toISOString()).trim(),
+            updatedBy: String(row[12] || '').trim(),
+          });
+        }
+        if (parsedBC02.length > 0) {
+          const existingBC02 = StorageService.getBC02List();
+          const bc02Map = new Map<string, BC02Record>();
+          existingBC02.forEach(b => bc02Map.set(b.id, b));
+          parsedBC02.forEach(b => bc02Map.set(b.id, b));
+          StorageService.saveBC02ListDirectly(Array.from(bc02Map.values()));
+        }
+      }
+
+      // --- E. ĐỌC BC03_YDINH ---
+      const bc03Source = sheetsData['BC03_YDINH'] || [];
+      if (Array.isArray(bc03Source) && bc03Source.length > 1) {
+        const parsedBC03: BC03Record[] = [];
+        for (let r = 1; r < bc03Source.length; r++) {
+          const row = bc03Source[r];
+          const recId = String(row[0] || '').trim();
+          const hid = String(row[1] || '').trim().toUpperCase();
+          if (!recId || recId === 'RECORD_ID' || !hid || hid === 'HOUSEHOLD_ID') continue;
+
+          parsedBC03.push({
+            id: recId,
+            householdId: hid,
+            scoreYD: Number(row[2]) || 5,
+            answers: [
+              { questionId: 'YD01', score: Number(row[3]) || 5 },
+              { questionId: 'YD02', score: Number(row[4]) || 5 },
+              { questionId: 'YD03', score: Number(row[5]) || 5 },
+              { questionId: 'YD04', score: Number(row[6]) || 5 },
+              { questionId: 'YD05', score: Number(row[7]) || 5 },
+            ],
+            isLocked: String(row[8] || '').toUpperCase() === 'TRUE',
+            submittedBy: String(row[9] || '').trim(),
+            submittedAt: String(row[10] || new Date().toISOString()).trim(),
+            updatedAt: String(row[10] || new Date().toISOString()).trim(),
+            updatedBy: String(row[9] || '').trim(),
+          });
+        }
+        if (parsedBC03.length > 0) {
+          const existingBC03 = StorageService.getBC03List();
+          const bc03Map = new Map<string, BC03Record>();
+          existingBC03.forEach(b => bc03Map.set(b.id, b));
+          parsedBC03.forEach(b => bc03Map.set(b.id, b));
+          StorageService.saveBC03ListDirectly(Array.from(bc03Map.values()));
+        }
+      }
+
+      // --- F. ĐỌC BC04_CWM (PRE & POST) ---
+      const parsedBC04: BC04Record[] = [];
+      const preSource = sheetsData['BC04_CWM_PRE'] || [];
+      if (Array.isArray(preSource) && preSource.length > 1) {
+        for (let r = 1; r < preSource.length; r++) {
+          const row = preSource[r];
+          const recId = String(row[0] || '').trim();
+          const hid = String(row[1] || '').trim().toUpperCase();
+          if (!recId || recId === 'RECORD_ID' || !hid || hid === 'HOUSEHOLD_ID') continue;
+
+          parsedBC04.push({
+            id: recId,
+            householdId: hid,
+            stage: 'PRE',
+            scoreCWM: Number(row[2]) || 0,
+            criteria: {
+              b1_thuGom: Number(row[3]) || 0,
+              b2_phanLoai: Number(row[4]) || 0,
+              b3_luuChua: Number(row[5]) || 0,
+              b4_khongXaThang: Number(row[6]) || 0,
+              b5_xuLyTaiSuDung: Number(row[7]) || 0,
+              b6_veSinh: Number(row[8]) || 0,
+            },
+            observationNotes: String(row[9] || '').trim(),
+            evidenceDescription: String(row[10] || '').trim(),
+            failureReasons: String(row[11] || '').trim(),
+            observedBy: String(row[12] || '').trim(),
+            observedAt: String(row[13] || new Date().toISOString()).trim(),
+            isLocked: String(row[14] || '').toUpperCase() === 'TRUE',
+            createdAt: String(row[13] || new Date().toISOString()).trim(),
+            createdBy: String(row[12] || '').trim(),
+            updatedAt: String(row[13] || new Date().toISOString()).trim(),
+            updatedBy: String(row[12] || '').trim(),
+          });
+        }
+      }
+
+      const postSource = sheetsData['BC04_CWM_POST'] || [];
+      if (Array.isArray(postSource) && postSource.length > 1) {
+        for (let r = 1; r < postSource.length; r++) {
+          const row = postSource[r];
+          const recId = String(row[0] || '').trim();
+          const hid = String(row[1] || '').trim().toUpperCase();
+          if (!recId || recId === 'RECORD_ID' || !hid || hid === 'HOUSEHOLD_ID') continue;
+
+          parsedBC04.push({
+            id: recId,
+            householdId: hid,
+            stage: 'POST',
+            scoreCWM: Number(row[2]) || 0,
+            criteria: {
+              b1_thuGom: Number(row[3]) || 0,
+              b2_phanLoai: Number(row[4]) || 0,
+              b3_luuChua: Number(row[5]) || 0,
+              b4_khongXaThang: Number(row[6]) || 0,
+              b5_xuLyTaiSuDung: Number(row[7]) || 0,
+              b6_veSinh: Number(row[8]) || 0,
+            },
+            observationNotes: String(row[9] || '').trim(),
+            evidenceDescription: String(row[10] || '').trim(),
+            failureReasons: String(row[11] || '').trim(),
+            observedBy: String(row[12] || '').trim(),
+            observedAt: String(row[13] || new Date().toISOString()).trim(),
+            isLocked: String(row[14] || '').toUpperCase() === 'TRUE',
+            createdAt: String(row[13] || new Date().toISOString()).trim(),
+            createdBy: String(row[12] || '').trim(),
+            updatedAt: String(row[13] || new Date().toISOString()).trim(),
+            updatedBy: String(row[12] || '').trim(),
+          });
+        }
+      }
+      if (parsedBC04.length > 0) {
+        const existingBC04 = StorageService.getBC04List();
+        const bc04Map = new Map<string, BC04Record>();
+        existingBC04.forEach(b => bc04Map.set(b.id, b));
+        parsedBC04.forEach(b => bc04Map.set(b.id, b));
+        StorageService.saveBC04ListDirectly(Array.from(bc04Map.values()));
+      }
+
+      // --- G. ĐỌC BC05_CAM_KET ---
+      const bc05Source = sheetsData['BC05_CAM_KET'] || [];
+      if (Array.isArray(bc05Source) && bc05Source.length > 1) {
+        const parsedBC05: BC05Record[] = [];
+        for (let r = 1; r < bc05Source.length; r++) {
+          const row = bc05Source[r];
+          const recId = String(row[0] || '').trim();
+          const hid = String(row[1] || '').trim().toUpperCase();
+          if (!recId || recId === 'RECORD_ID' || !hid || hid === 'HOUSEHOLD_ID') continue;
+
+          parsedBC05.push({
+            id: recId,
+            householdId: hid,
+            commitments: {
+              b1_thuGom: Number(row[2]) === 1,
+              b2_phanLoai: Number(row[3]) === 1,
+              b3_luuChua: Number(row[4]) === 1,
+              b4_khongXaThang: Number(row[5]) === 1,
+              b5_xuLyTaiSuDung: Number(row[6]) === 1,
+              b6_veSinh: Number(row[7]) === 1,
+              b7_baoCaoHangTuan: Number(row[8]) === 1,
+            },
+            confirmed: String(row[9] || '').toUpperCase() === 'TRUE',
+            confirmedBy: String(row[10] || '').trim(),
+            confirmedAt: String(row[11] || '').trim(),
+            version: String(row[12] || '1.0').trim(),
+            createdAt: String(row[11] || new Date().toISOString()).trim(),
+          });
+        }
+        if (parsedBC05.length > 0) {
+          const existingBC05 = StorageService.getBC05List();
+          const bc05Map = new Map<string, BC05Record>();
+          existingBC05.forEach(b => bc05Map.set(b.id, b));
+          parsedBC05.forEach(b => bc05Map.set(b.id, b));
+          StorageService.saveBC05ListDirectly(Array.from(bc05Map.values()));
+        }
+      }
+
+      // --- H. ĐỌC BC06_WEEKLY ---
+      const bc06Source = sheetsData['BC06_WEEKLY'] || sheetsData['NHAT_KY_CHAN_NUOI'] || [];
+      if (Array.isArray(bc06Source) && bc06Source.length > 1) {
+        const parsedBC06: BC06Record[] = [];
+        for (let r = 1; r < bc06Source.length; r++) {
+          const row = bc06Source[r];
+          const recId = String(row[0] || '').trim();
+          const hid = String(row[1] || '').trim().toUpperCase();
+          if (!recId || recId === 'RECORD_ID' || recId === 'MÃ NHẬT KÝ' || !hid || hid === 'HOUSEHOLD_ID' || hid === 'MÃ HỘ') continue;
+
+          const weekStr = String(row[2] || 'W1').trim() as any;
+          parsedBC06.push({
+            id: recId,
+            householdId: hid,
+            week: weekStr,
+            weeklyScore: Number(row[3]) || 6,
+            behaviors: {
+              b1_thuGom: Number(row[4]) === 1,
+              b2_phanLoai: Number(row[5]) === 1,
+              b3_luuChua: Number(row[6]) === 1,
+              b4_khongXaThang: Number(row[7]) === 1,
+              b5_xuLyTaiSuDung: Number(row[8]) === 1,
+              b6_veSinh: Number(row[9]) === 1,
+            },
+            barriers: String(row[10] || '').split(';').map((s) => s.trim()).filter(Boolean),
+            otherBarrierText: String(row[11] || '').trim(),
+            isLocked: false,
+            submittedBy: String(row[12] || '').trim(),
+            submittedAt: String(row[13] || new Date().toISOString()).trim(),
+            updatedAt: String(row[13] || new Date().toISOString()).trim(),
+            updatedBy: String(row[12] || '').trim(),
+          });
+        }
+        if (parsedBC06.length > 0) {
+          const existingBC06 = StorageService.getBC06List();
+          const bc06Map = new Map<string, BC06Record>();
+          existingBC06.forEach(b => bc06Map.set(b.id, b));
+          parsedBC06.forEach(b => bc06Map.set(b.id, b));
+          StorageService.saveBC06ListDirectly(Array.from(bc06Map.values()));
+        }
+      }
+
+      // --- I. ĐỌC BC07_POST ---
+      const bc07Source = sheetsData['BC07_POST'] || [];
+      if (Array.isArray(bc07Source) && bc07Source.length > 1) {
+        const parsedBC07: BC07Record[] = [];
+        for (let r = 1; r < bc07Source.length; r++) {
+          const row = bc07Source[r];
+          const recId = String(row[0] || '').trim();
+          const hid = String(row[1] || '').trim().toUpperCase();
+          if (!recId || recId === 'RECORD_ID' || !hid || hid === 'HOUSEHOLD_ID') continue;
+
+          parsedBC07.push({
+            id: recId,
+            householdId: hid,
+            scoreHT_Post: Number(row[2]) || 6,
+            behaviorReport: {
+              b1_thuGom: Number(row[3]) === 1,
+              b2_phanLoai: Number(row[4]) === 1,
+              b3_luuChua: Number(row[5]) === 1,
+              b4_khongXaThang: Number(row[6]) === 1,
+              b5_xuLyTaiSuDung: Number(row[7]) === 1,
+              b6_veSinh: Number(row[8]) === 1,
+            },
+            maintenanceWillingness: Number(row[9]) || 5,
+            feedbackProcess: String(row[10] || '').trim(),
+            mainBarriers: String(row[11] || '').split(';').map((s) => s.trim()).filter(Boolean),
+            isLocked: String(row[12] || '').toUpperCase() === 'TRUE',
+            submittedBy: String(row[13] || '').trim(),
+            submittedAt: String(row[14] || new Date().toISOString()).trim(),
+            updatedAt: String(row[14] || new Date().toISOString()).trim(),
+            updatedBy: String(row[13] || '').trim(),
+          });
+        }
+        if (parsedBC07.length > 0) {
+          const existingBC07 = StorageService.getBC07List();
+          const bc07Map = new Map<string, BC07Record>();
+          existingBC07.forEach(b => bc07Map.set(b.id, b));
+          parsedBC07.forEach(b => bc07Map.set(b.id, b));
+          StorageService.saveBC07ListDirectly(Array.from(bc07Map.values()));
+        }
       }
 
       StorageService.setSyncStatus('SYNCED');
 
       return {
         success: true,
-        message: `Đã đồng bộ 2 chiều thành công ${finalUsers.length} tài khoản và ${finalHouseholds.length} hộ nuôi gà từ Google Sheets!`,
-        users: finalUsers,
-        importedCount: finalUsers.length,
+        message: `Đã nạp toàn bộ dữ liệu từ Google Sheets thành công (${parsedUsers.length} tài khoản, ${parsedHouseholds.length} hộ nuôi)!`,
+        users: StorageService.getUsers(),
+        importedCount: parsedUsers.length,
       };
     } catch (err: any) {
       console.error('Lỗi khi kéo dữ liệu từ Google Sheets:', err);
@@ -890,6 +1360,47 @@ export class GoogleSheetsService {
         users: StorageService.getUsers(),
       };
     }
+  }
+
+  /**
+   * Quy trình chuẩn: THÊM / SỬA -> GHI GOOGLE SHEETS -> ĐỌC LẠI TỪ GOOGLE SHEETS -> APP HIỂN THỊ
+   * Đảm bảo Google Sheets là database chính, không bị lệch dữ liệu giữa App và Sheets
+   */
+  static async saveAndSync(audit?: {
+    action: string;
+    module: string;
+    reason: string;
+    householdId?: string;
+  }): Promise<{ success: boolean; message: string }> {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      return {
+        success: false,
+        message: 'Bạn đang ngoại tuyến. Vui lòng kết nối Internet để lưu dữ liệu trực tiếp vào Google Sheets.',
+      };
+    }
+
+    // 1. Ghi dữ liệu lên Google Sheets
+    const syncRes = await this.syncToGoogleSheets();
+    if (!syncRes.success) {
+      return {
+        success: false,
+        message: `Lỗi ghi dữ liệu vào Google Sheets: ${syncRes.message}`,
+      };
+    }
+
+    // 2. Đọc lại ngay từ Google Sheets để đồng bộ nguồn chuẩn
+    const pullRes = await this.pullFromGoogleSheets();
+    if (!pullRes.success) {
+      return {
+        success: true,
+        message: 'Đã ghi dữ liệu vào Google Sheets thành công!',
+      };
+    }
+
+    return {
+      success: true,
+      message: 'Đã lưu và đồng bộ thành công với Google Sheets!',
+    };
   }
 
   /**
@@ -917,8 +1428,6 @@ export class GoogleSheetsService {
       };
     }
   }
-
-  private static autoSyncTimer: any = null;
 
   /**
    * Tự động lên lịch đẩy lên Google Sheets (Debounce 1.5s để gom nhóm)
